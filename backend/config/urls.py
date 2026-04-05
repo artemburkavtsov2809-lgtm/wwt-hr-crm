@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework import viewsets, permissions, serializers
 from rest_framework.decorators import api_view, permission_classes
@@ -13,6 +14,13 @@ from performance.views import PerformanceViewSet
 from documents.views import CookiesChecklistViewSet
 
 
+# ===================== HEALTH CHECK =====================
+def health_check(request):
+    """Health check endpoint for Railway"""
+    return HttpResponse("OK")
+
+
+# ===================== SERIALIZERS =====================
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -27,12 +35,14 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
+# ===================== VIEWSETS =====================
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
 
+# ===================== API VIEWS =====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -47,6 +57,7 @@ def current_user(request):
     })
 
 
+# ===================== ROUTERS =====================
 router = DefaultRouter()
 router.register(r'employees', EmployeeViewSet)
 router.register(r'teams', TeamViewSet)
@@ -55,11 +66,20 @@ router.register(r'performance', PerformanceViewSet)
 router.register(r'cookies', CookiesChecklistViewSet)
 router.register(r'auth/users', UserViewSet)
 
+# ===================== URL PATTERNS =====================
 urlpatterns = [
+    # Health check for Railway (required for healthcheck to pass)
+    path('', health_check, name='health_check'),
+
+    # Admin
     path('admin/', admin.site.urls),
+
+    # API endpoints
     path('api/', include(router.urls)),
     path('api/auth/me/', current_user, name='current_user'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Django REST Framework auth
     path('api-auth/', include('rest_framework.urls')),
 ]
