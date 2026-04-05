@@ -7,10 +7,7 @@ const useAuthStore = create((set) => ({
   isAuthenticated: !!localStorage.getItem('access_token'),
 
   login: async (username, password) => {
-    const res = await axios.post('http://127.0.0.1:8000/api/token/', {
-      username,
-      password,
-    })
+  const res = await axios.post(`${API_URL}/token/`, { username, password })
     localStorage.setItem('access_token', res.data.access)
     localStorage.setItem('refresh_token', res.data.refresh)
     set({ isAuthenticated: true })
