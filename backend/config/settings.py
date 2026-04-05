@@ -18,11 +18,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # third party
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
-    # local
     'employees',
     'hr_needs',
     'performance',
@@ -63,10 +61,8 @@ ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ===================== DATABASE =====================
-# Для Railway - використовуємо тимчасову директорію /tmp
-# Дані будуть втрачатися при кожному перезапуску, але це дозволяє працювати з SQLite
+# Для Railway - використовуємо /tmp для SQLite
 if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
-    # Railway: використовуємо /tmp для бази даних
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -74,7 +70,6 @@ if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME
         }
     }
 else:
-    # Локальна розробка
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -82,7 +77,6 @@ else:
         }
     }
 
-# Якщо є змінна DATABASE_URL (PostgreSQL), використовуємо її в пріоритеті
 DATABASE_URL = env('DATABASE_URL', default=None)
 if DATABASE_URL:
     DATABASES['default'] = dj_database_url.parse(DATABASE_URL)
@@ -90,8 +84,6 @@ if DATABASE_URL:
 # ===================== STATIC FILES =====================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Автоматичне створення директорії staticfiles
 STATIC_ROOT.mkdir(exist_ok=True)
 
 STORAGES = {
@@ -106,8 +98,6 @@ STORAGES = {
 # ===================== MEDIA =====================
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-
-# Автоматичне створення директорії media
 MEDIA_ROOT.mkdir(exist_ok=True)
 
 # ===================== INTERNATIONALIZATION =====================
@@ -134,7 +124,6 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:5173',
 ]
 
-# Для HTTPS на Railway
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
@@ -152,38 +141,33 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-# ===================== AUTO MIGRATIONS FOR RAILWAY =====================
-# Цей код автоматично виконує міграції при запуску на Railway
+# ===================== AUTO MIGRATIONS =====================
 if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
-    import sys
-    import logging
-
-    # Налаштування логування
-    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
-    logger = logging.getLogger(__name__)
-
     try:
         from django.core.management import call_command
-        from django.db import connections
 
-        logger.info("=" * 50)
-        logger.info("🚀 Railway deployment detected. Running migrations...")
-        logger.info("=" * 50)
+        call_command('migrate', '--noinput')
+        print("✅ Migrations completed!")
+    except Exception as e:
+        print(f"❌ Migration error: {e}")
 
-        # Виконуємо міграції
-        call_command('migrate', '--noinput', verbosity=1)
-
-        logger.info("✅ Migrations completed successfully!")
-
-        # Перевіряємо чи є суперкористувач
+# ===================== AUTO CREATE SUPERUSER =====================
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
+    try:
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
+
         if not User.objects.filter(is_superuser=True).exists():
-            logger.warning("⚠️ No superuser found. Create one via: railway run python manage.py createsuperuser")
-
+            User.objects.create_superuser(
+                username='admin',
+                email='admin@wwt-hr-crm.com',
+                password='WwtAdmin2026!'
+            )
+            print("=" * 60)
+            print("✅ SUPERUSER CREATED!")
+            print("   Username: admin")
+            print("   Password: WwtAdmin2026!")
+            print("=" * 60)
     except Exception as e:
-        logger.error(f"❌ Error running migrations: {e}")
-        import traceback
-
-        traceback.print_exc()
+        print(f"⚠️ Could not create superuser: {e}")
