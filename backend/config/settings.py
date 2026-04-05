@@ -63,13 +63,26 @@ ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ===================== DATABASE =====================
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Для Railway - використовуємо тимчасову директорію /tmp
+# Дані будуть втрачатися при кожному перезапуску, але це дозволяє працювати з SQLite
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
+    # Railway: використовуємо /tmp для бази даних
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': '/tmp/db.sqlite3',
+        }
     }
-}
+else:
+    # Локальна розробка
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
+# Якщо є змінна DATABASE_URL (PostgreSQL), використовуємо її в пріоритеті
 DATABASE_URL = env('DATABASE_URL', default=None)
 if DATABASE_URL:
     DATABASES['default'] = dj_database_url.parse(DATABASE_URL)
