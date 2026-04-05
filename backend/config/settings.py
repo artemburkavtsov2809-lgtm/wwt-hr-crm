@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ===================== SECURITY =====================
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-f3*22^^k$r!yy*mx(vhga(_kx6ai5pje0_z%9c(h1%ti(diqa2')
 DEBUG = env('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost,127.0.0.1,*').split(',')
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost,127.0.0.1,.railway.app,*').split(',')
 
 # ===================== APPLICATIONS =====================
 INSTALLED_APPS = [
@@ -108,10 +108,23 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ===================== CORS =====================
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://127.0.0.1:5173'
+    default='http://localhost:5173,http://127.0.0.1:5173,https://wwt-hr-crm-production.up.railway.app'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+
+# ===================== CSRF =====================
+CSRF_TRUSTED_ORIGINS = [
+    'https://wwt-hr-crm-production.up.railway.app',
+    'https://*.railway.app',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
+# Для HTTPS на Railway
+CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
 
 # ===================== REST FRAMEWORK =====================
 REST_FRAMEWORK = {
