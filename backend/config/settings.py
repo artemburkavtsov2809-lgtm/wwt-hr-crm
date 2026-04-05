@@ -3,13 +3,14 @@ from pathlib import Path
 from decouple import config as env
 import dj_database_url
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ===================== SECURITY =====================
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-f3*22^^k$r!yy*mx(vhga(_kx6ai5pje0_z%9c(h1%ti(diqa2')
 DEBUG = env('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost,127.0.0.1,*').split(',')
 
+# ===================== APPLICATIONS =====================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -28,10 +29,11 @@ INSTALLED_APPS = [
     'documents',
 ]
 
+# ===================== MIDDLEWARE =====================
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',   # ← вже правильно
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -56,10 +58,9 @@ if DATABASE_URL:
     DATABASES['default'] = dj_database_url.parse(DATABASE_URL)
 
 # ===================== STATIC FILES =====================
-STATIC_URL = '/static/'                    # ← Змініть з 'static/' на '/static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# WhiteNoise (правильний для Django 4.2+)
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -73,15 +74,15 @@ STORAGES = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# ===================== Інше =====================
-LANGUAGE_CODE = 'uk'          # краще українською
-TIME_ZONE = 'Europe/Kiev'     # або 'UTC'
-
+# ===================== INTERNATIONALIZATION =====================
+LANGUAGE_CODE = 'uk'
+TIME_ZONE = 'Europe/Kyiv'        # ← Це виправлення головної помилки
 USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ===================== CORS =====================
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
     default='http://localhost:5173,http://127.0.0.1:5173'
@@ -89,6 +90,7 @@ CORS_ALLOWED_ORIGINS = env(
 
 CORS_ALLOW_CREDENTIALS = True
 
+# ===================== REST FRAMEWORK =====================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
