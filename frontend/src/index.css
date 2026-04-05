@@ -1,0 +1,27 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+}
+
+select {
+  background: #1e1b4b !important;
+  color: #fff !important;
+}
+
+select option {
+  background: #1e1b4b !important;
+  color: #fff !important;
+}
+
+select option:hover,
+select option:checked {
+  background: #00d2ff !important;
+  color: #fff !important;
+}
