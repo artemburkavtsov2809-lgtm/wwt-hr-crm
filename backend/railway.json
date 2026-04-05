@@ -1,12 +1,13 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "nixpacksConfig": {
+      "pythonVersion": "3.11"
+    }
   },
   "deploy": {
-    "startCommand": "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8080} --workers 2",
+    "startCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 100,
-    "restartPolicyType": "ON_FAILURE"
+    "healthcheckTimeout": 100
   }
 }
