@@ -61,6 +61,9 @@ if DATABASE_URL:
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Автоматичне створення директорії staticfiles
+STATIC_ROOT.mkdir(exist_ok=True)
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -74,9 +77,12 @@ STORAGES = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Автоматичне створення директорії media
+MEDIA_ROOT.mkdir(exist_ok=True)
+
 # ===================== INTERNATIONALIZATION =====================
 LANGUAGE_CODE = 'uk'
-TIME_ZONE = 'Europe/Kyiv'        # ← Це виправлення головної помилки
+TIME_ZONE = 'Europe/Kyiv'
 USE_I18N = True
 USE_TZ = True
 
