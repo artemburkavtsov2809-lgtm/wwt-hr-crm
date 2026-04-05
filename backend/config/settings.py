@@ -138,3 +138,39 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+# ===================== AUTO MIGRATIONS FOR RAILWAY =====================
+# Цей код автоматично виконує міграції при запуску на Railway
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
+    import sys
+    import logging
+
+    # Налаштування логування
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+    logger = logging.getLogger(__name__)
+
+    try:
+        from django.core.management import call_command
+        from django.db import connections
+
+        logger.info("=" * 50)
+        logger.info("🚀 Railway deployment detected. Running migrations...")
+        logger.info("=" * 50)
+
+        # Виконуємо міграції
+        call_command('migrate', '--noinput', verbosity=1)
+
+        logger.info("✅ Migrations completed successfully!")
+
+        # Перевіряємо чи є суперкористувач
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        if not User.objects.filter(is_superuser=True).exists():
+            logger.warning("⚠️ No superuser found. Create one via: railway run python manage.py createsuperuser")
+
+    except Exception as e:
+        logger.error(f"❌ Error running migrations: {e}")
+        import traceback
+
+        traceback.print_exc()
