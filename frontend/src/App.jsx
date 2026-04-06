@@ -20,43 +20,49 @@ function AdminRoute({ children }) {
   const user = useAuthStore((s) => s.user)
   
   if (!isAuthenticated) return <Navigate to="/login" />
-  if (user === null) return null // чекаємо поки завантажиться
-  if (!user.is_superuser) return <Navigate to="/" />
+  if (user === null) return null
+  if (!user.is_superuser && !user.is_staff) return <Navigate to="/" />
   return <Layout>{children}</Layout>
 }
 
 export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const checkAuth = useAuthStore((s) => s.checkAuth)
   const getUserFromToken = useAuthStore((s) => s.getUserFromToken)
-  const user = useAuthStore((s) => s.user)
+  const checkAuth = useAuthStore((s) => s.checkAuth)
   const [userLoaded, setUserLoaded] = useState(false)
 
   useEffect(() => {
-    if (isAuthenticated) {
-      // Отримуємо дані користувача з токену (без API запиту)
-      const userData = getUserFromToken()
-      if (userData && !user) {
-        // Якщо даних ще немає в store, додаємо їх
-        useAuthStore.setState({ user: userData })
-      }
-      setUserLoaded(true)
-    } else {
-      // Перевіряємо чи є валідний токен
+    // Перевіряємо токен при завантаженні
+    if (!isAuthenticated) {
       const isValid = checkAuth()
       if (isValid) {
-        // Токен є і він валідний, але чомусь isAuthenticated false
         const userData = getUserFromToken()
         if (userData) {
-          useAuthStore.setState({ isAuthenticated: true, user: userData })
+          useAuthStore.setState({ 
+            isAuthenticated: true, 
+            user: userData 
+          })
         }
       }
-      setUserLoaded(true)
+    } else if (!useAuthStore.getState().user) {
+      // Якщо є isAuthenticated, але немає user, беремо з токену
+      const userData = getUserFromToken()
+      if (userData) {
+        useAuthStore.setState({ user: userData })
+      }
     }
-  }, [isAuthenticated, checkAuth, getUserFromToken, user])
+    
+    setUserLoaded(true)
+  }, [isAuthenticated, getUserFromToken, checkAuth])
 
   if (!userLoaded) return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center' 
+    }}>
       <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>Завантаження...</div>
     </div>
   )
