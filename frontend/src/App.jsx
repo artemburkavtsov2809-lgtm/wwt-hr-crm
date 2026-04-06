@@ -18,6 +18,7 @@ function PrivateRoute({ children }) {
 function AdminRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const user = useAuthStore((s) => s.user)
+  
   if (!isAuthenticated) return <Navigate to="/login" />
   if (user === null) return null // чекаємо поки завантажиться
   if (!user.is_superuser) return <Navigate to="/" />
@@ -26,16 +27,33 @@ function AdminRoute({ children }) {
 
 export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const fetchUser = useAuthStore((s) => s.fetchUser)
+  const checkAuth = useAuthStore((s) => s.checkAuth)
+  const getUserFromToken = useAuthStore((s) => s.getUserFromToken)
+  const user = useAuthStore((s) => s.user)
   const [userLoaded, setUserLoaded] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchUser().finally(() => setUserLoaded(true))
+      // Отримуємо дані користувача з токену (без API запиту)
+      const userData = getUserFromToken()
+      if (userData && !user) {
+        // Якщо даних ще немає в store, додаємо їх
+        useAuthStore.setState({ user: userData })
+      }
+      setUserLoaded(true)
     } else {
+      // Перевіряємо чи є валідний токен
+      const isValid = checkAuth()
+      if (isValid) {
+        // Токен є і він валідний, але чомусь isAuthenticated false
+        const userData = getUserFromToken()
+        if (userData) {
+          useAuthStore.setState({ isAuthenticated: true, user: userData })
+        }
+      }
       setUserLoaded(true)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, checkAuth, getUserFromToken, user])
 
   if (!userLoaded) return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

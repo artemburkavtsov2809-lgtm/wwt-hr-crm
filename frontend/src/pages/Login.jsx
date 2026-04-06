@@ -6,16 +6,25 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const login = useAuthStore((s) => s.login)
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
+    setLoading(true)
+
     try {
       await login(username, password)
       navigate('/')
-    } catch {
-      setError('Невірний логін або пароль')
+    } catch (err) {
+      const errorMessage = err.response?.data?.detail || 
+                          err.response?.data?.non_field_errors?.[0] ||
+                          'Невірний логін або пароль'
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -58,6 +67,7 @@ export default function Login() {
             placeholder="Логін"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            disabled={loading}
             style={{
               width: '100%', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)',
               background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 14, marginBottom: 16,
@@ -69,18 +79,23 @@ export default function Login() {
             placeholder="Пароль"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
             style={{
               width: '100%', padding: '14px 18px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)',
               background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 14, marginBottom: 24,
               outline: 'none', boxSizing: 'border-box',
             }}
           />
-          <button type="submit" style={{
-            width: '100%', padding: '14px', borderRadius: 12, border: 'none',
-            background: 'linear-gradient(135deg, #00d2ff, #3a7bd5)', color: '#fff',
-            fontSize: 15, fontWeight: 600, cursor: 'pointer',
-          }}>
-            Увійти
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+              background: 'linear-gradient(135deg, #00d2ff, #3a7bd5)', color: '#fff',
+              fontSize: 15, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+            }}>
+            {loading ? 'Завантаження...' : 'Увійти'}
           </button>
         </form>
       </div>

@@ -1,4 +1,3 @@
-// frontend/src/api/client.js
 import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
@@ -23,26 +22,35 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config
+    
+    // Якщо 401 і це не запит на refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+      
       const refresh = localStorage.getItem('refresh_token')
-      if (refresh && !error.config._retry) {
-        error.config._retry = true
+      if (refresh) {
         try {
           const res = await axios.post(`${BASE_URL}/token/refresh/`, {
             refresh: refresh
           })
-          localStorage.setItem('access_token', res.data.access)
-          error.config.headers.Authorization = `Bearer ${res.data.access}`
-          return api(error.config)
-        } catch {
+          
+          if (res.data.access) {
+            localStorage.setItem('access_token', res.data.access)
+            originalRequest.headers.Authorization = `Bearer ${res.data.access}`
+            return api(originalRequest)
+          }
+        } catch (refreshError) {
           localStorage.clear()
           window.location.href = '/login'
+          return Promise.reject(refreshError)
         }
       } else {
         localStorage.clear()
         window.location.href = '/login'
       }
     }
+    
     return Promise.reject(error)
   }
 )
