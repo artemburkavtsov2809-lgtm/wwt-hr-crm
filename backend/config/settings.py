@@ -102,7 +102,7 @@ CORS_ALLOW_ALL_ORIGINS = env('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
 # Або явно вказуємо дозволені домени (рекомендовано для production)
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://127.0.0.1:5173,https://*.vercel.app'
+    default='http://localhost:5173,http://127.0.0.1:5173,https://wwt-hr-crm.vercel.app'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
