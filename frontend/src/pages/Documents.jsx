@@ -21,14 +21,19 @@ const CURRENT_MONTH = new Date().getMonth()
 const CURRENT_YEAR = new Date().getFullYear()
 
 const inputStyle = {
-  padding: '9px 14px', borderRadius: 10,
+  padding: '9px 14px',
+  borderRadius: 10,
   border: '1px solid rgba(255,255,255,0.15)',
   background: 'rgba(255,255,255,0.08)',
-  color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+  color: '#fff',
+  fontSize: 13,
+  outline: 'none',
+  boxSizing: 'border-box',
 }
 
 export default function Documents() {
   const queryClient = useQueryClient()
+
   const [tab, setTab] = useState('checklist')
   const [selectedTeam, setSelectedTeam] = useState('')
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
@@ -42,28 +47,26 @@ export default function Documents() {
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
 
-  // Active + onboarding employees of selected team
+  // Active + onboarding employees
   const { 
-    data: activeEmps, 
-    isLoading: activeLoading,
-    refetch: refetchActive 
+    data: activeEmpsData, 
+    isLoading: activeLoading 
   } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
     enabled: !!selectedTeam,
   })
-  
+
   const { 
-    data: onboardingEmps, 
-    isLoading: onboardingLoading,
-    refetch: refetchOnboarding 
+    data: onboardingEmpsData, 
+    isLoading: onboardingLoading 
   } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  // Existing cookies records for selected team+year
+  // Existing cookies records
   const { 
     data: existingData, 
     isLoading: existingLoading,
@@ -77,8 +80,7 @@ export default function Documents() {
   // History
   const { 
     data: historyData, 
-    isLoading: histLoading,
-    refetch: refetchHistory 
+    isLoading: histLoading 
   } = useQuery({
     queryKey: ['cookies-history', filterTeam, filterYear],
     queryFn: () => {
@@ -90,19 +92,17 @@ export default function Documents() {
     enabled: tab === 'history',
   })
 
-  const { data: cookieTeams, refetch: refetchCookieTeams } = useQuery({
+  const { data: cookieTeams } = useQuery({
     queryKey: ['cookies-teams'],
     queryFn: () => api.get('/cookies/teams/').then(r => r.data),
+    enabled: tab === 'history',
   })
 
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/cookies/', data),
     onSuccess: () => {
-      // Інвалідуємо всі пов'язані запити
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
-      refetchExisting()
-      if (tab === 'history') refetchHistory()
     },
   })
 
@@ -111,8 +111,6 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
-      refetchExisting()
-      if (tab === 'history') refetchHistory()
     },
   })
 
@@ -121,46 +119,34 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
-      refetchExisting()
-      if (tab === 'history') refetchHistory()
     },
   })
 
-  // Автоматичне оновлення при зміні фільтрів
+  // Автоматичне оновлення
   useEffect(() => {
     if (selectedTeam) {
-      refetchActive()
-      refetchOnboarding()
       refetchExisting()
     }
-  }, [selectedTeam, selectedYear, refetchActive, refetchOnboarding, refetchExisting])
+  }, [selectedTeam, selectedYear, refetchExisting])
 
   useEffect(() => {
     if (tab === 'history') {
-      refetchHistory()
-      refetchCookieTeams()
+      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
     }
-  }, [tab, filterTeam, filterYear, refetchHistory, refetchCookieTeams])
+  }, [tab, filterTeam, filterYear, queryClient])
 
-  // Функція для ручного оновлення всіх даних
   const refreshAllData = () => {
     refetchTeams()
-    if (selectedTeam) {
-      refetchActive()
-      refetchOnboarding()
-      refetchExisting()
-    }
+    if (selectedTeam) refetchExisting()
     if (tab === 'history') {
-      refetchHistory()
-      refetchCookieTeams()
+      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
     }
   }
 
   const teams = teamsData || []
-  const allEmps = [
-    ...(activeEmps?.results || activeEmps || []),
-    ...(onboardingEmps?.results || onboardingEmps || []),
-  ]
+  const activeEmps = activeEmpsData?.results || activeEmpsData || []
+  const onboardingEmps = onboardingEmpsData?.results || onboardingEmpsData || []
+  const allEmps = [...activeEmps, ...onboardingEmps]
   const existing = existingData?.results || existingData || []
 
   // Merge employees with existing records
@@ -169,10 +155,12 @@ export default function Documents() {
     return { emp, record }
   })
 
+  // Створюємо запис, якщо його немає
   const ensureRecord = async (emp) => {
-    const record = existing.find(r => r.employee_name === emp.full_name)
-    if (record) return record
-    const res = await api.post('/cookies/', {
+    const existingRecord = existing.find(r => r.employee_name === emp.full_name)
+    if (existingRecord) return existingRecord
+
+    const res = await createMutation.mutateAsync({
       employee_name: emp.full_name,
       team: selectedTeam,
       year: selectedYear,
@@ -182,23 +170,30 @@ export default function Documents() {
   }
 
   const toggleMonth = async (emp, record, monthKey) => {
-    if (record) {
-      updateMutation.mutate({ id: record.id, data: { [monthKey]: !record[monthKey] } })
-    } else {
-      const newRecord = await ensureRecord(emp)
-      updateMutation.mutate({ id: newRecord.id, data: { [monthKey]: true } })
+    let currentRecord = record
+
+    if (!currentRecord) {
+      currentRecord = await ensureRecord(emp)
     }
+
+    const newValue = !currentRecord[monthKey]
+
+    updateMutation.mutate({
+      id: currentRecord.id,
+      data: { [monthKey]: newValue }
+    })
   }
 
-  // History list
+  // History
   const histList = historyData?.results || historyData || []
-  const filteredHist = search ? histList.filter(i => i.employee_name.toLowerCase().includes(search.toLowerCase())) : histList
+  const filteredHist = search 
+    ? histList.filter(i => i.employee_name.toLowerCase().includes(search.toLowerCase())) 
+    : histList
 
-  // Stats for checklist tab
   const currentMonthKey = MONTHS[CURRENT_MONTH]?.key
   const currentMonthDone = rows.filter(({ record }) => record?.[currentMonthKey]).length
 
-  const isLoading = (selectedTeam && (activeLoading || onboardingLoading || existingLoading))
+  const isLoading = selectedTeam && (activeLoading || onboardingLoading || existingLoading)
 
   return (
     <div>
@@ -210,21 +205,34 @@ export default function Documents() {
           </h1>
           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4 }}>Щомісячні виплати</div>
         </div>
+
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={refreshAllData} style={{
-            padding: '9px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13,
-            border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)',
-            color: 'rgba(255,255,255,0.6)',
-          }}>
+          <button 
+            onClick={refreshAllData} 
+            style={{
+              padding: '9px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13,
+              border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)',
+              color: 'rgba(255,255,255,0.6)',
+            }}
+          >
             🔄 Оновити
           </button>
+
           {['checklist', 'history'].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '9px 20px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              border: tab === t ? 'none' : '1px solid rgba(255,255,255,0.15)',
-              background: tab === t ? 'linear-gradient(135deg, #00d2ff, #3a7bd5)' : 'transparent',
-              color: tab === t ? '#fff' : 'rgba(255,255,255,0.6)',
-            }}>
+            <button 
+              key={t} 
+              onClick={() => setTab(t)} 
+              style={{
+                padding: '9px 20px', 
+                borderRadius: 10, 
+                cursor: 'pointer', 
+                fontSize: 13, 
+                fontWeight: 600,
+                border: tab === t ? 'none' : '1px solid rgba(255,255,255,0.15)',
+                background: tab === t ? 'linear-gradient(135deg, #00d2ff, #3a7bd5)' : 'transparent',
+                color: tab === t ? '#fff' : 'rgba(255,255,255,0.6)',
+              }}
+            >
               {t === 'checklist' ? '✅ Чекліст' : '📊 Всі записи'}
             </button>
           ))}
@@ -233,7 +241,7 @@ export default function Documents() {
 
       {tab === 'checklist' && (
         <div>
-          {/* Setup */}
+          {/* Filters */}
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 20, marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 6 }}>Команда</div>
@@ -248,10 +256,13 @@ export default function Documents() {
                 {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+
             {selectedTeam && (
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, alignItems: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#2ed573' }}>{currentMonthDone}/{rows.length}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#2ed573' }}>
+                    {currentMonthDone}/{rows.length}
+                  </div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>цього місяця</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
@@ -288,18 +299,25 @@ export default function Documents() {
                     <th style={{ padding: '12px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontSize: 11, textTransform: 'uppercase', minWidth: 200 }}>Співробітник</th>
                     {MONTHS.map((m, i) => (
                       <th key={m.key} style={{
-                        padding: '12px 6px', textAlign: 'center', fontSize: 11, minWidth: 44,
+                        padding: '12px 6px',
+                        textAlign: 'center',
+                        fontSize: 11,
+                        minWidth: 44,
                         color: i === CURRENT_MONTH ? '#00d2ff' : 'rgba(255,255,255,0.45)',
                         fontWeight: i === CURRENT_MONTH ? 700 : 600,
-                        textTransform: 'uppercase', letterSpacing: 0.5,
-                      }}>{m.label}</th>
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                      }}>
+                        {m.label}
+                      </th>
                     ))}
                     <th style={{ padding: '12px 10px', textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 11, textTransform: 'uppercase', minWidth: 60 }}>Разом</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(({ emp, record }) => (
-                    <tr key={emp.id}
+                    <tr 
+                      key={emp.id}
                       style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -315,23 +333,36 @@ export default function Documents() {
                           </div>
                         </div>
                       </td>
+
                       {MONTHS.map((m, i) => {
                         const checked = record?.[m.key] || false
                         return (
-                          <td key={m.key} style={{
-                            padding: '10px 6px', textAlign: 'center',
-                            background: i === CURRENT_MONTH ? 'rgba(0,210,255,0.03)' : 'transparent',
-                          }}>
+                          <td 
+                            key={m.key} 
+                            style={{
+                              padding: '10px 6px',
+                              textAlign: 'center',
+                              background: i === CURRENT_MONTH ? 'rgba(0,210,255,0.03)' : 'transparent',
+                            }}
+                          >
                             <div
                               onClick={() => toggleMonth(emp, record, m.key)}
                               style={{
-                                width: 30, height: 30, borderRadius: 8, cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                margin: '0 auto', transition: 'all 0.15s',
+                                width: 30, 
+                                height: 30, 
+                                borderRadius: 8, 
+                                cursor: 'pointer',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                margin: '0 auto',
+                                transition: 'all 0.15s',
                                 background: checked ? 'rgba(46,213,115,0.2)' : 'rgba(255,255,255,0.04)',
                                 border: checked ? '1px solid rgba(46,213,115,0.5)' : '1px solid rgba(255,255,255,0.1)',
                                 color: checked ? '#2ed573' : 'rgba(255,255,255,0.15)',
                                 fontSize: 16,
+                                pointerEvents: updateMutation.isPending ? 'none' : 'auto',
+                                opacity: updateMutation.isPending ? 0.6 : 1,
                               }}
                             >
                               {checked ? '✓' : ''}
@@ -339,9 +370,11 @@ export default function Documents() {
                           </td>
                         )
                       })}
+
                       <td style={{ padding: '10px', textAlign: 'center' }}>
                         <span style={{
-                          fontSize: 13, fontWeight: 700,
+                          fontSize: 13,
+                          fontWeight: 700,
                           color: !record ? 'rgba(255,255,255,0.2)' :
                             record.total_checked >= 10 ? '#2ed573' :
                             record.total_checked >= 6 ? '#ffc107' :
@@ -362,7 +395,12 @@ export default function Documents() {
       {tab === 'history' && (
         <div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <input placeholder="🔍 Пошук..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: 220 }} />
+            <input 
+              placeholder="🔍 Пошук..." 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              style={{ ...inputStyle, width: 220 }} 
+            />
             <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)} style={inputStyle}>
               <option value="">Всі команди</option>
               {(cookieTeams || []).map(t => <option key={t} value={t}>{t}</option>)}
@@ -383,11 +421,16 @@ export default function Documents() {
                     <th style={{ padding: '12px 10px', textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 11, textTransform: 'uppercase', minWidth: 70 }}>Відділ</th>
                     {MONTHS.map((m, i) => (
                       <th key={m.key} style={{
-                        padding: '12px 6px', textAlign: 'center', fontSize: 11, minWidth: 40,
+                        padding: '12px 6px',
+                        textAlign: 'center',
+                        fontSize: 11,
+                        minWidth: 40,
                         color: i === CURRENT_MONTH ? '#00d2ff' : 'rgba(255,255,255,0.45)',
                         fontWeight: i === CURRENT_MONTH ? 700 : 600,
                         textTransform: 'uppercase',
-                      }}>{m.label}</th>
+                      }}>
+                        {m.label}
+                      </th>
                     ))}
                     <th style={{ padding: '12px 10px', textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 11, minWidth: 60 }}>Разом</th>
                     <th style={{ minWidth: 50 }}></th>
@@ -395,36 +438,68 @@ export default function Documents() {
                 </thead>
                 <tbody>
                   {filteredHist.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                    <tr 
+                      key={item.id} 
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       <td style={{ padding: '10px 16px', color: '#fff', fontWeight: 500 }}>{item.employee_name}</td>
                       <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, background: 'rgba(0,210,255,0.12)', color: '#00d2ff' }}>{item.team}</span>
+                        <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, background: 'rgba(0,210,255,0.12)', color: '#00d2ff' }}>
+                          {item.team}
+                        </span>
                       </td>
                       {MONTHS.map((m, i) => (
-                        <td key={m.key} style={{ padding: '10px 6px', textAlign: 'center', background: i === CURRENT_MONTH ? 'rgba(0,210,255,0.03)' : 'transparent' }}>
+                        <td 
+                          key={m.key} 
+                          style={{ 
+                            padding: '10px 6px', 
+                            textAlign: 'center', 
+                            background: i === CURRENT_MONTH ? 'rgba(0,210,255,0.03)' : 'transparent' 
+                          }}
+                        >
                           <span style={{ color: item[m.key] ? '#2ed573' : 'rgba(255,255,255,0.15)', fontSize: 16 }}>
                             {item[m.key] ? '✓' : '·'}
                           </span>
                         </td>
                       ))}
                       <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <span style={{ fontWeight: 700, color: item.total_checked >= 10 ? '#2ed573' : item.total_checked >= 6 ? '#ffc107' : '#ff9800' }}>
+                        <span style={{ 
+                          fontWeight: 700, 
+                          color: item.total_checked >= 10 ? '#2ed573' : 
+                                 item.total_checked >= 6 ? '#ffc107' : '#ff9800' 
+                        }}>
                           {item.total_checked}/12
                         </span>
                       </td>
                       <td style={{ padding: '10px' }}>
-                        <button onClick={() => { if (confirm(`Видалити ${item.employee_name}?`)) deleteMutation.mutate(item.id) }}
-                          style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(255,107,107,0.3)', background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', cursor: 'pointer', fontSize: 12 }}>
+                        <button 
+                          onClick={() => { 
+                            if (confirm(`Видалити ${item.employee_name}?`)) 
+                              deleteMutation.mutate(item.id) 
+                          }}
+                          style={{ 
+                            padding: '4px 10px', 
+                            borderRadius: 8, 
+                            border: '1px solid rgba(255,107,107,0.3)', 
+                            background: 'rgba(255,107,107,0.1)', 
+                            color: '#ff6b6b', 
+                            cursor: 'pointer', 
+                            fontSize: 12 
+                          }}
+                        >
                           🗑️
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredHist.length === 0 && (
-                    <tr><td colSpan={16} style={{ padding: 50, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Немає записів</td></tr>
+                    <tr>
+                      <td colSpan={15} style={{ padding: 50, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
+                        Немає записів
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
