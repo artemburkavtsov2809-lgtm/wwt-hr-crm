@@ -95,18 +95,34 @@ USE_I18N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ===================== CORS =====================
+# ===================== CORS (для Vercel) =====================
+# Дозволяємо всі origins для розробки (змінити на production!)
+CORS_ALLOW_ALL_ORIGINS = env('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
+
+# Або явно вказуємо дозволені домени (рекомендовано для production)
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://127.0.0.1:5173'
+    default='http://localhost:5173,http://127.0.0.1:5173,https://*.vercel.app'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # ===================== CSRF =====================
 CSRF_TRUSTED_ORIGINS = env(
     'CSRF_TRUSTED_ORIGINS',
-    default='https://*.railway.app,http://localhost:5173,http://127.0.0.1:5173'
+    default='https://*.railway.app,https://*.vercel.app,http://localhost:5173,http://127.0.0.1:5173'
 ).split(',')
 
 CSRF_COOKIE_SECURE = not DEBUG
