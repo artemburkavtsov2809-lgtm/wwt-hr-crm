@@ -1,11 +1,16 @@
+// frontend/src/api/client.js
 import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
 
 const api = axios.create({
   baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
+// Інтерцептор для додавання токену
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
@@ -14,14 +19,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Інтерцептор для обробки помилок
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
       const refresh = localStorage.getItem('refresh_token')
-      if (refresh) {
+      if (refresh && !error.config._retry) {
+        error.config._retry = true
         try {
-          const res = await axios.post(`${BASE_URL}/token/refresh/`, { refresh })
+          const res = await axios.post(`${BASE_URL}/token/refresh/`, {
+            refresh: refresh
+          })
           localStorage.setItem('access_token', res.data.access)
           error.config.headers.Authorization = `Bearer ${res.data.access}`
           return api(error.config)
@@ -29,6 +38,9 @@ api.interceptors.response.use(
           localStorage.clear()
           window.location.href = '/login'
         }
+      } else {
+        localStorage.clear()
+        window.location.href = '/login'
       }
     }
     return Promise.reject(error)
