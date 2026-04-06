@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../api/client'
 
@@ -29,7 +29,7 @@ const inputStyle = {
 
 export default function Documents() {
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState('checklist') // 'checklist' | 'history'
+  const [tab, setTab] = useState('checklist')
   const [selectedTeam, setSelectedTeam] = useState('')
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
   const [filterTeam, setFilterTeam] = useState('')
@@ -37,32 +37,49 @@ export default function Documents() {
   const [search, setSearch] = useState('')
 
   // All teams from employees
-  const { data: teamsData } = useQuery({
+  const { data: teamsData, refetch: refetchTeams } = useQuery({
     queryKey: ['teams'],
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
 
   // Active + onboarding employees of selected team
-  const { data: activeEmps } = useQuery({
+  const { 
+    data: activeEmps, 
+    isLoading: activeLoading,
+    refetch: refetchActive 
+  } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
     enabled: !!selectedTeam,
   })
-  const { data: onboardingEmps } = useQuery({
+  
+  const { 
+    data: onboardingEmps, 
+    isLoading: onboardingLoading,
+    refetch: refetchOnboarding 
+  } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
   // Existing cookies records for selected team+year
-  const { data: existingData } = useQuery({
+  const { 
+    data: existingData, 
+    isLoading: existingLoading,
+    refetch: refetchExisting 
+  } = useQuery({
     queryKey: ['cookies', selectedTeam, selectedYear],
     queryFn: () => api.get(`/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
   // History
-  const { data: historyData, isLoading: histLoading } = useQuery({
+  const { 
+    data: historyData, 
+    isLoading: histLoading,
+    refetch: refetchHistory 
+  } = useQuery({
     queryKey: ['cookies-history', filterTeam, filterYear],
     queryFn: () => {
       const params = new URLSearchParams()
@@ -73,25 +90,71 @@ export default function Documents() {
     enabled: tab === 'history',
   })
 
-  const { data: cookieTeams } = useQuery({
+  const { data: cookieTeams, refetch: refetchCookieTeams } = useQuery({
     queryKey: ['cookies-teams'],
     queryFn: () => api.get('/cookies/teams/').then(r => r.data),
   })
 
   const createMutation = useMutation({
-    mutationFn: (d) => api.post('/cookies/', d),
-    onSuccess: () => queryClient.invalidateQueries(['cookies']),
+    mutationFn: (data) => api.post('/cookies/', data),
+    onSuccess: () => {
+      // Інвалідуємо всі пов'язані запити
+      queryClient.invalidateQueries({ queryKey: ['cookies'] })
+      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
+      refetchExisting()
+      if (tab === 'history') refetchHistory()
+    },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.patch(`/cookies/${id}/`, data),
-    onSuccess: () => queryClient.invalidateQueries(['cookies']),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cookies'] })
+      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
+      refetchExisting()
+      if (tab === 'history') refetchHistory()
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/cookies/${id}/`),
-    onSuccess: () => queryClient.invalidateQueries(['cookies-history']),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cookies'] })
+      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
+      refetchExisting()
+      if (tab === 'history') refetchHistory()
+    },
   })
+
+  // Автоматичне оновлення при зміні фільтрів
+  useEffect(() => {
+    if (selectedTeam) {
+      refetchActive()
+      refetchOnboarding()
+      refetchExisting()
+    }
+  }, [selectedTeam, selectedYear, refetchActive, refetchOnboarding, refetchExisting])
+
+  useEffect(() => {
+    if (tab === 'history') {
+      refetchHistory()
+      refetchCookieTeams()
+    }
+  }, [tab, filterTeam, filterYear, refetchHistory, refetchCookieTeams])
+
+  // Функція для ручного оновлення всіх даних
+  const refreshAllData = () => {
+    refetchTeams()
+    if (selectedTeam) {
+      refetchActive()
+      refetchOnboarding()
+      refetchExisting()
+    }
+    if (tab === 'history') {
+      refetchHistory()
+      refetchCookieTeams()
+    }
+  }
 
   const teams = teamsData || []
   const allEmps = [
@@ -114,7 +177,7 @@ export default function Documents() {
       team: selectedTeam,
       year: selectedYear,
     })
-    queryClient.invalidateQueries(['cookies'])
+    await refetchExisting()
     return res.data
   }
 
@@ -135,6 +198,8 @@ export default function Documents() {
   const currentMonthKey = MONTHS[CURRENT_MONTH]?.key
   const currentMonthDone = rows.filter(({ record }) => record?.[currentMonthKey]).length
 
+  const isLoading = (selectedTeam && (activeLoading || onboardingLoading || existingLoading))
+
   return (
     <div>
       {/* Header */}
@@ -146,6 +211,13 @@ export default function Documents() {
           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4 }}>Щомісячні виплати</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={refreshAllData} style={{
+            padding: '9px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13,
+            border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)',
+            color: 'rgba(255,255,255,0.6)',
+          }}>
+            🔄 Оновити
+          </button>
           {['checklist', 'history'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               padding: '9px 20px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
@@ -196,13 +268,19 @@ export default function Documents() {
             </div>
           )}
 
-          {selectedTeam && rows.length === 0 && (
+          {isLoading && (
+            <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>
+              ⏳ Завантаження даних...
+            </div>
+          )}
+
+          {selectedTeam && !isLoading && rows.length === 0 && (
             <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>
               Немає активних співробітників у команді {selectedTeam}
             </div>
           )}
 
-          {selectedTeam && rows.length > 0 && (
+          {selectedTeam && !isLoading && rows.length > 0 && (
             <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
