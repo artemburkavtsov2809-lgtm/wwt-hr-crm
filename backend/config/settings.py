@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ===================== SECURITY =====================
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-f3*22^^k$r!yy*mx(vhga(_kx6ai5pje0_z%9c(h1%ti(diqa2')
 DEBUG = env('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost,127.0.0.1,.railway.app,*').split(',')
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost,127.0.0.1,*').split(',')
 
 # ===================== APPLICATIONS =====================
 INSTALLED_APPS = [
@@ -61,8 +61,10 @@ ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ===================== DATABASE =====================
-# Для Railway - використовуємо /tmp для SQLite
-if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
+# Для Railway використовуємо SQLite в /tmp (тимчасова пам'ять)
+IS_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME')
+
+if IS_RAILWAY:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -77,6 +79,7 @@ else:
         }
     }
 
+# Якщо є DATABASE_URL - використовуємо її (пріоритет)
 DATABASE_URL = env('DATABASE_URL', default=None)
 if DATABASE_URL:
     DATABASES['default'] = dj_database_url.parse(DATABASE_URL)
@@ -84,21 +87,17 @@ if DATABASE_URL:
 # ===================== STATIC FILES =====================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATIC_ROOT.mkdir(exist_ok=True)
 
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+# Створюємо папку, якщо не існує
+os.makedirs(STATIC_ROOT, exist_ok=True)
+
+# Whitenoise для статичних файлів
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ===================== MEDIA =====================
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-MEDIA_ROOT.mkdir(exist_ok=True)
+os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 # ===================== INTERNATIONALIZATION =====================
 LANGUAGE_CODE = 'uk'
@@ -111,20 +110,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ===================== CORS =====================
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://127.0.0.1:5173,https://wwt-hr-crm-production.up.railway.app'
+    default='http://localhost:5173,http://127.0.0.1:5173'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 
 # ===================== CSRF =====================
-CSRF_TRUSTED_ORIGINS = [
-    'https://wwt-hr-crm-production.up.railway.app',
-    'https://*.railway.app',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-]
+CSRF_TRUSTED_ORIGINS = env(
+    'CSRF_TRUSTED_ORIGINS',
+    default='https://*.railway.app,http://localhost:5173,http://127.0.0.1:5173'
+).split(',')
 
-CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
 
@@ -140,34 +137,3 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
-
-# ===================== AUTO MIGRATIONS =====================
-if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
-    try:
-        from django.core.management import call_command
-
-        call_command('migrate', '--noinput')
-        print("✅ Migrations completed!")
-    except Exception as e:
-        print(f"❌ Migration error: {e}")
-
-# ===================== AUTO CREATE SUPERUSER =====================
-if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME'):
-    try:
-        from django.contrib.auth import get_user_model
-
-        User = get_user_model()
-
-        if not User.objects.filter(is_superuser=True).exists():
-            User.objects.create_superuser(
-                username='admin',
-                email='admin@wwt-hr-crm.com',
-                password='WwtAdmin2026!'
-            )
-            print("=" * 60)
-            print("✅ SUPERUSER CREATED!")
-            print("   Username: admin")
-            print("   Password: WwtAdmin2026!")
-            print("=" * 60)
-    except Exception as e:
-        print(f"⚠️ Could not create superuser: {e}")

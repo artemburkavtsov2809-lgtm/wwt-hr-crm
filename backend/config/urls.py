@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse
+from django.db import connection
 from rest_framework.routers import DefaultRouter
 from rest_framework import viewsets, permissions, serializers
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth.models import User
@@ -14,10 +15,32 @@ from performance.views import PerformanceViewSet
 from documents.views import CookiesChecklistViewSet
 
 
-# ===================== HEALTH CHECK =====================
+# ===================== HEALTH CHECKS =====================
 def health_check(request):
-    """Health check endpoint for Railway"""
-    return HttpResponse("OK")
+    """Basic health check for Railway - MUST return 200 OK"""
+    return HttpResponse("OK", status=200, content_type="text/plain")
+
+
+def health_check_json(request):
+    """Extended health check with database status"""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        db_status = "ok"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    return JsonResponse({
+        "status": "ok",
+        "database": db_status,
+        "service": "wwt-hr-crm"
+    }, status=200)
+
+
+def ping(request):
+    """Simple ping endpoint - no auth required"""
+    return JsonResponse({"ping": "pong", "timestamp": 2026}, status=200)
 
 
 # ===================== SERIALIZERS =====================
@@ -68,8 +91,11 @@ router.register(r'auth/users', UserViewSet)
 
 # ===================== URL PATTERNS =====================
 urlpatterns = [
-    # Health check for Railway (required for healthcheck to pass)
+    # Health checks - NO AUTH REQUIRED (must be first)
     path('', health_check, name='health_check'),
+    path('health/', health_check, name='health_check_alt'),
+    path('health/json/', health_check_json, name='health_check_json'),
+    path('ping/', ping, name='ping'),
 
     # Admin
     path('admin/', admin.site.urls),
