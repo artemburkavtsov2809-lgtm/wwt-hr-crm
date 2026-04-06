@@ -15,13 +15,29 @@ export default function Login() {
     setError('')
     setLoading(true)
 
+    console.log('🔐 Login attempt with:', { username, password: '***' })
+
     try {
-      await login(username, password)
+      const result = await login(username, password)
+      console.log('✅ Login successful, result:', result)
+      console.log('📦 Token in localStorage:', !!localStorage.getItem('access_token'))
       navigate('/')
     } catch (err) {
-      const errorMessage = err.response?.data?.detail || 
-                          err.response?.data?.non_field_errors?.[0] ||
-                          'Невірний логін або пароль'
+      console.error('❌ Login error:', err)
+      console.error('Error response:', err.response)
+      
+      let errorMessage = 'Невірний логін або пароль'
+      
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail
+      } else if (err.response?.data?.non_field_errors) {
+        errorMessage = err.response.data.non_field_errors[0]
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
       setError(errorMessage)
     } finally {
       setLoading(false)

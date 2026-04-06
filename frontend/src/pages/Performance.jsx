@@ -75,9 +75,9 @@ export default function Performance() {
   const [selectedTeam, setSelectedTeam] = useState('')
   const [reviewer, setReviewer] = useState('')
   const [reviewDate, setReviewDate] = useState(new Date().toISOString().split('T')[0])
-  const [scores, setScores] = useState({}) // { employeeId: { skill: value } }
+  const [scores, setScores] = useState({})
   const [notes, setNotes] = useState({})
-  const [tab, setTab] = useState('review') // 'review' | 'history'
+  const [tab, setTab] = useState('review')
   const [filterTeam, setFilterTeam] = useState('')
   const [saved, setSaved] = useState(false)
 
@@ -86,20 +86,19 @@ export default function Performance() {
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
 
-  const { data: employees } = useQuery({
+  const { data: employees, refetch: refetchEmployees } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  // Also get onboarding employees for the team
-  const { data: onboardingEmps } = useQuery({
+  const { data: onboardingEmps, refetch: refetchOnboarding } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  const { data: history, isLoading: histLoading } = useQuery({
+  const { data: history, isLoading: histLoading, refetch: refetchHistory } = useQuery({
     queryKey: ['performance-history', filterTeam],
     queryFn: () => {
       const params = new URLSearchParams()
@@ -117,15 +116,18 @@ export default function Performance() {
   const saveMutation = useMutation({
     mutationFn: (reviews) => Promise.all(reviews.map(r => api.post('/performance/', r))),
     onSuccess: () => {
-      queryClient.invalidateQueries(['performance-history'])
+      refetchHistory()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      // Очищаємо форми після збереження
+      setScores({})
+      setNotes({})
     },
   })
 
   const deleteReview = useMutation({
     mutationFn: (id) => api.delete(`/performance/${id}/`),
-    onSuccess: () => queryClient.invalidateQueries(['performance-history']),
+    onSuccess: () => refetchHistory(),
   })
 
   const allEmps = [
@@ -155,16 +157,23 @@ export default function Performance() {
 
   const teams = teamsData || []
 
+  // Функція для оновлення даних при зміні вкладки
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    if (newTab === 'history') {
+      setTimeout(() => refetchHistory(), 100)
+    }
+  }
+
   return (
     <div>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, background: 'linear-gradient(90deg, #fff, #a8edea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
           Перформанс
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           {['review', 'history'].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
+            <button key={t} onClick={() => handleTabChange(t)} style={{
               padding: '9px 20px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
               border: tab === t ? 'none' : '1px solid rgba(255,255,255,0.15)',
               background: tab === t ? 'linear-gradient(135deg, #00d2ff, #3a7bd5)' : 'transparent',
@@ -178,7 +187,6 @@ export default function Performance() {
 
       {tab === 'review' && (
         <div>
-          {/* Setup row */}
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 20, marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 6 }}>Команда</div>

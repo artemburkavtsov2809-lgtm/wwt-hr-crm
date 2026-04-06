@@ -10,43 +10,60 @@ const useAuthStore = create((set, get) => ({
 
   login: async (username, password) => {
     try {
+      console.log('1. Спроба логіну до:', `${API_URL}/token/`)
+      
       const res = await axios.post(`${API_URL}/token/`, { 
         username, 
         password 
       })
       
+      console.log('2. Відповідь від сервера:', res.data)
+      
+      if (!res.data.access) {
+        throw new Error('Сервер не повернув access_token')
+      }
+      
       localStorage.setItem('access_token', res.data.access)
       localStorage.setItem('refresh_token', res.data.refresh)
       
+      console.log('3. Токени збережено в localStorage')
+      console.log('   access_token:', res.data.access.substring(0, 50) + '...')
+      
       // Отримуємо дані користувача з токену
       const userData = get().getUserFromToken()
+      console.log('4. Дані з токену:', userData)
       
       set({ 
         isAuthenticated: true,
         user: userData
       })
       
+      console.log('5. Стан оновлено: isAuthenticated = true')
+      
       return res.data
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message)
+      console.error('❌ Помилка логіну:', error.response?.data || error.message)
       throw error
     }
   },
 
-  // Отримання даних з JWT токену
   getUserFromToken: () => {
     const token = localStorage.getItem('access_token')
-    if (!token) return null
+    if (!token) {
+      console.log('getUserFromToken: немає токену')
+      return null
+    }
     
     try {
       const payload = token.split('.')[1]
       const decoded = JSON.parse(atob(payload))
+      console.log('Декодований payload:', decoded)
       
-      // Мапінг полів з токену
       return {
         id: decoded.user_id || decoded.id,
         username: decoded.username,
         email: decoded.email,
+        is_superuser: decoded.is_superuser || decoded.is_staff || false,
         ...decoded
       }
     } catch (error) {
@@ -55,16 +72,13 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Спроба отримати користувача з API (якщо ендпоінт з'явиться)
   fetchUser: async () => {
-    // Спочатку спробуємо отримати з токену
     const userFromToken = get().getUserFromToken()
     if (userFromToken) {
       set({ user: userFromToken })
       return userFromToken
     }
     
-    // Якщо немає в токені, пробуємо різні ендпоінти
     const possibleEndpoints = [
       '/users/me/',
       '/auth/users/me/', 
@@ -83,7 +97,7 @@ const useAuthStore = create((set, get) => ({
           return res.data
         }
       } catch (e) {
-        // Продовжуємо пошук
+        console.log(`❌ Ендпоінт ${endpoint} не працює:`, e.response?.status)
       }
     }
     
@@ -92,13 +106,15 @@ const useAuthStore = create((set, get) => ({
   },
 
   logout: () => {
+    console.log('Вихід із системи')
     localStorage.clear()
     set({ isAuthenticated: false, user: null })
   },
   
-  // Перевірка чи є токен валідним
   checkAuth: () => {
     const token = localStorage.getItem('access_token')
+    console.log('checkAuth: токен є?', !!token)
+    
     if (!token) {
       set({ isAuthenticated: false, user: null })
       return false
@@ -108,16 +124,21 @@ const useAuthStore = create((set, get) => ({
       const payload = token.split('.')[1]
       const decoded = JSON.parse(atob(payload))
       const exp = decoded.exp * 1000
+      const now = Date.now()
       
-      if (Date.now() >= exp) {
-        // Токен прострочено
+      console.log(`Термін дії: ${new Date(exp)}, зараз: ${new Date(now)}`)
+      
+      if (now >= exp) {
+        console.log('Токен прострочено')
         get().logout()
         return false
       }
       
+      console.log('Токен валідний')
       set({ isAuthenticated: true })
       return true
-    } catch {
+    } catch (error) {
+      console.error('Помилка перевірки токену:', error)
       get().logout()
       return false
     }
