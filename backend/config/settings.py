@@ -60,18 +60,16 @@ TEMPLATES = [
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# ===================== DATABASE =====================
-# Для Railway використовуємо SQLite в /tmp (тимчасова пам'ять)
-IS_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_SERVICE_NAME')
+# ===================== DATABASE (Neon PostgreSQL) =====================
+DATABASE_URL = env('DATABASE_URL', default=None)
 
-if IS_RAILWAY:
+if DATABASE_URL:
+    # Використовуємо PostgreSQL (Neon або інший провайдер)
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': '/tmp/db.sqlite3',
-        }
+        'default': dj_database_url.parse(DATABASE_URL)
     }
 else:
+    # Локально SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -79,19 +77,10 @@ else:
         }
     }
 
-# Якщо є DATABASE_URL - використовуємо її (пріоритет)
-DATABASE_URL = env('DATABASE_URL', default=None)
-if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.parse(DATABASE_URL)
-
 # ===================== STATIC FILES =====================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Створюємо папку, якщо не існує
 os.makedirs(STATIC_ROOT, exist_ok=True)
-
-# Whitenoise для статичних файлів
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ===================== MEDIA =====================
@@ -104,7 +93,6 @@ LANGUAGE_CODE = 'uk'
 TIME_ZONE = 'Europe/Kyiv'
 USE_I18N = True
 USE_TZ = True
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ===================== CORS =====================
