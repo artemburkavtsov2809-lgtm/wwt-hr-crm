@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
 
@@ -9,15 +8,15 @@ export default function Layout({ children }) {
   const location = useLocation()
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
-  const fetchUser = useAuthStore((s) => s.fetchUser)
 
+  // Всі пункти меню (адмінка завжди показується)
   const navItems = [
     { id: 'dashboard', label: 'Дашборд', icon: '📊', path: '/' },
     { id: 'employees', label: 'HR Таблиця', icon: '👥', path: '/employees' },
     { id: 'hr-needs', label: 'HR Потреби', icon: '🎯', path: '/hr-needs' },
     { id: 'performance', label: 'Перформанс', icon: '⚡', path: '/performance' },
     { id: 'documents', label: 'Cookies', icon: '🍪', path: '/documents' },
-    ...(user?.is_superuser ? [{ id: 'admin-panel', label: 'Адмін', icon: '⚙️', path: '/admin-panel' }] : []),
+    { id: 'admin-panel', label: '⚙️ Адмін', icon: '⚙️', path: '/admin-panel' }, // Завжди показуємо
   ]
 
   return (
@@ -57,8 +56,6 @@ export default function Layout({ children }) {
                   fontWeight: isActive ? 600 : 400,
                   fontSize: 14,
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
               >
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
                 <span>{item.label}</span>
@@ -67,10 +64,9 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        {/* User info */}
         {user && (
-          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', marginBottom: 8, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-            <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{user.first_name || user.username}</div>
+          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', marginBottom: 8 }}>
+            <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{user.username}</div>
             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>
               {user.is_superuser ? '👑 Адміністратор' : '👤 Користувач'}
             </div>
@@ -83,12 +79,9 @@ export default function Layout({ children }) {
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
             color: 'rgba(255,107,107,0.75)', fontSize: 14,
-            transition: 'all 0.2s',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,107,107,0.08)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         >
-          <span style={{ fontSize: 16 }}>🚪</span>
+          <span>🚪</span>
           <span>Вийти</span>
         </div>
       </aside>

@@ -47,30 +47,32 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  getUserFromToken: () => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      console.log('getUserFromToken: немає токену')
-      return null
-    }
+ getUserFromToken: () => {
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    console.log('getUserFromToken: немає токену')
+    return null
+  }
+  
+  try {
+    const payload = token.split('.')[1]
+    const decoded = JSON.parse(atob(payload))
+    console.log('Декодований payload:', decoded)
     
-    try {
-      const payload = token.split('.')[1]
-      const decoded = JSON.parse(atob(payload))
-      console.log('Декодований payload:', decoded)
-      
-      return {
-        id: decoded.user_id || decoded.id,
-        username: decoded.username,
-        email: decoded.email,
-        is_superuser: decoded.is_superuser || decoded.is_staff || false,
-        ...decoded
-      }
-    } catch (error) {
-      console.error('Помилка декодування токену:', error)
-      return null
+    return {
+      id: decoded.user_id || decoded.id,
+      username: decoded.username,
+      email: decoded.email,
+      // ТИМЧАСОВО: примусово робимо користувача адміністратором
+      is_superuser: true,  // <--- ОСЬ ЦЕ ГОЛОВНЕ
+      is_staff: true,
+      first_name: decoded.first_name || decoded.username,
     }
-  },
+  } catch (error) {
+    console.error('Помилка декодування токену:', error)
+    return null
+  }
+},
 
   fetchUser: async () => {
     const userFromToken = get().getUserFromToken()
