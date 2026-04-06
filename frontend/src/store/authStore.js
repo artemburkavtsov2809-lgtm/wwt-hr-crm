@@ -59,14 +59,16 @@ const useAuthStore = create((set, get) => ({
     const decoded = JSON.parse(atob(payload))
     console.log('Декодований payload:', decoded)
     
+    // Якщо user_id = 1 або 2 - це суперюзер
+    const isSuperUser = decoded.user_id === 1 || decoded.user_id === 2
+    
     return {
       id: decoded.user_id || decoded.id,
-      username: decoded.username,
-      email: decoded.email,
-      // ТИМЧАСОВО: примусово робимо користувача адміністратором
-      is_superuser: true,  // <--- ОСЬ ЦЕ ГОЛОВНЕ
-      is_staff: true,
-      first_name: decoded.first_name || decoded.username,
+      username: decoded.username || 'admin',
+      email: decoded.email || 'admin@example.com',
+      is_superuser: isSuperUser,  // <-- ОСЬ ЦЕ ВАЖЛИВО
+      is_staff: isSuperUser,
+      first_name: decoded.first_name || 'Admin',
     }
   } catch (error) {
     console.error('Помилка декодування токену:', error)

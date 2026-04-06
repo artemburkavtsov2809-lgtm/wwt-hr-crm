@@ -10,14 +10,14 @@ export default function Layout({ children }) {
   const user = useAuthStore((s) => s.user)
 
   // Всі пункти меню (адмінка завжди показується)
-  const navItems = [
-    { id: 'dashboard', label: 'Дашборд', icon: '📊', path: '/' },
-    { id: 'employees', label: 'HR Таблиця', icon: '👥', path: '/employees' },
-    { id: 'hr-needs', label: 'HR Потреби', icon: '🎯', path: '/hr-needs' },
-    { id: 'performance', label: 'Перформанс', icon: '⚡', path: '/performance' },
-    { id: 'documents', label: 'Cookies', icon: '🍪', path: '/documents' },
-    { id: 'admin-panel', label: '⚙️ Адмін', icon: '⚙️', path: '/admin-panel' }, // Завжди показуємо
-  ]
+const navItems = [
+  { id: 'dashboard', label: 'Дашборд', icon: '📊', path: '/' },
+  { id: 'employees', label: 'HR Таблиця', icon: '👥', path: '/employees' },
+  { id: 'hr-needs', label: 'HR Потреби', icon: '🎯', path: '/hr-needs' },
+  { id: 'performance', label: 'Перформанс', icon: '⚡', path: '/performance' },
+  { id: 'documents', label: 'Cookies', icon: '🍪', path: '/documents' },
+  ...(user?.is_superuser ? [{ id: 'admin-panel', label: 'Адмін', icon: '⚙️', path: '/admin-panel' }] : []),
+]
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)' }}>
