@@ -27,7 +27,6 @@ const useAuthStore = create((set, get) => ({
       localStorage.setItem('refresh_token', res.data.refresh)
       
       console.log('3. Токени збережено в localStorage')
-      console.log('   access_token:', res.data.access.substring(0, 50) + '...')
       
       // Отримуємо дані користувача з токену
       const userData = get().getUserFromToken()
@@ -38,7 +37,13 @@ const useAuthStore = create((set, get) => ({
         user: userData
       })
       
-      console.log('5. Стан оновлено: isAuthenticated = true')
+      // Якщо в токені немає username — підтягуємо з API
+      if (!userData.username || userData.username === `user_${userData.id}`) {
+        console.log('5. Username відсутній у токені, завантажуємо з API...')
+        await get().fetchUser()
+      }
+      
+      console.log('6. Стан оновлено:', get().user)
       
       return res.data
     } catch (error) {
@@ -59,24 +64,16 @@ const useAuthStore = create((set, get) => ({
       const decoded = JSON.parse(atob(payload))
       console.log('Декодований payload:', decoded)
       
-      // Перевіряємо наявність полів у токені
       const userId = decoded.user_id || decoded.id
-      const username = decoded.username
-      const email = decoded.email
-      const firstName = decoded.first_name
-      const isSuperUser = decoded.is_superuser || userId === 1 || userId === 2
       
-      // Якщо якесь поле відсутнє, логуємо попередження
-      if (!username) console.warn('⚠️ username відсутній у токені')
-      if (!email) console.warn('⚠️ email відсутній у токені')
-      
+      // Якщо поля відсутні — використовуємо ID як fallback
       return {
         id: userId,
-        username: username,
-        email: email,
-        is_superuser: isSuperUser,
-        is_staff: decoded.is_staff || isSuperUser,
-        first_name: firstName,
+        username: decoded.username || `user_${userId}`,
+        email: decoded.email || '',
+        is_superuser: decoded.is_superuser || userId === 1 || userId === 2,
+        is_staff: decoded.is_staff || userId === 1 || userId === 2,
+        first_name: decoded.first_name || '',
       }
     } catch (error) {
       console.error('Помилка декодування токену:', error)
@@ -85,19 +82,14 @@ const useAuthStore = create((set, get) => ({
   },
 
   fetchUser: async () => {
-    const userFromToken = get().getUserFromToken()
-    if (userFromToken) {
-      set({ user: userFromToken })
-      return userFromToken
-    }
-    
     const possibleEndpoints = [
       '/users/me/',
       '/auth/users/me/', 
       '/me/',
       '/current_user/',
       '/auth/me/',
-      '/user/'
+      '/user/',
+      '/users/current/'
     ]
     
     for (const endpoint of possibleEndpoints) {
@@ -113,7 +105,7 @@ const useAuthStore = create((set, get) => ({
       }
     }
     
-    console.warn('Не вдалося отримати дані користувача')
+    console.warn('⚠️ Не вдалося отримати дані користувача з API')
     return null
   },
 
@@ -125,7 +117,6 @@ const useAuthStore = create((set, get) => ({
   
   checkAuth: () => {
     const token = localStorage.getItem('access_token')
-    console.log('checkAuth: токен є?', !!token)
     
     if (!token) {
       set({ isAuthenticated: false, user: null })
@@ -138,19 +129,19 @@ const useAuthStore = create((set, get) => ({
       const exp = decoded.exp * 1000
       const now = Date.now()
       
-      console.log(`Термін дії: ${new Date(exp)}, зараз: ${new Date(now)}`)
-      
       if (now >= exp) {
         console.log('Токен прострочено')
         get().logout()
         return false
       }
       
-      console.log('Токен валідний')
-      
-      // Оновлюємо user з токена при перевірці
       const userData = get().getUserFromToken()
       set({ isAuthenticated: true, user: userData })
+      
+      // Якщо немає username — підтягуємо з API
+      if (!userData.username || userData.username.startsWith('user_')) {
+        get().fetchUser()
+      }
       
       return true
     } catch (error) {
