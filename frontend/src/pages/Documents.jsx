@@ -42,7 +42,7 @@ export default function Documents() {
   const [search, setSearch] = useState('')
 
   // All teams from employees
-  const { data: teamsData, refetch: refetchTeams } = useQuery({
+  const { data: teamsData, isError: teamsError } = useQuery({
     queryKey: ['teams'],
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
@@ -50,7 +50,8 @@ export default function Documents() {
   // Active + onboarding employees
   const { 
     data: activeEmpsData, 
-    isLoading: activeLoading 
+    isLoading: activeLoading,
+    isError: activeError
   } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
@@ -59,28 +60,32 @@ export default function Documents() {
 
   const { 
     data: onboardingEmpsData, 
-    isLoading: onboardingLoading 
+    isLoading: onboardingLoading,
+    isError: onboardingError
   } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  // Existing cookies records
+  // Existing cookies records — З ВИКЛЮЧЕННЯМ якщо API не існує
   const { 
     data: existingData, 
     isLoading: existingLoading,
+    isError: existingError,
     refetch: refetchExisting 
   } = useQuery({
     queryKey: ['cookies', selectedTeam, selectedYear],
     queryFn: () => api.get(`/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
     enabled: !!selectedTeam,
+    retry: false, // Не повторювати при 404
   })
 
   // History
   const { 
     data: historyData, 
-    isLoading: histLoading 
+    isLoading: histLoading,
+    isError: historyError
   } = useQuery({
     queryKey: ['cookies-history', filterTeam, filterYear],
     queryFn: () => {
@@ -90,12 +95,14 @@ export default function Documents() {
       return api.get(`/cookies/?${params}`).then(r => r.data)
     },
     enabled: tab === 'history',
+    retry: false,
   })
 
-  const { data: cookieTeams } = useQuery({
+  const { data: cookieTeams, isError: cookieTeamsError } = useQuery({
     queryKey: ['cookies-teams'],
     queryFn: () => api.get('/cookies/teams/').then(r => r.data),
     enabled: tab === 'history',
+    retry: false,
   })
 
   const createMutation = useMutation({
@@ -136,8 +143,12 @@ export default function Documents() {
   }, [tab, filterTeam, filterYear, queryClient])
 
   const refreshAllData = () => {
-    refetchTeams()
-    if (selectedTeam) refetchExisting()
+    queryClient.invalidateQueries({ queryKey: ['teams'] })
+    if (selectedTeam) {
+      queryClient.invalidateQueries({ queryKey: ['employees-active'] })
+      queryClient.invalidateQueries({ queryKey: ['employees-onboarding'] })
+      queryClient.invalidateQueries({ queryKey: ['cookies'] })
+    }
     if (tab === 'history') {
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
     }
@@ -160,13 +171,18 @@ export default function Documents() {
     const existingRecord = existing.find(r => r.employee_name === emp.full_name)
     if (existingRecord) return existingRecord
 
-    const res = await createMutation.mutateAsync({
-      employee_name: emp.full_name,
-      team: selectedTeam,
-      year: selectedYear,
-    })
-    await refetchExisting()
-    return res.data
+    try {
+      const res = await createMutation.mutateAsync({
+        employee_name: emp.full_name,
+        team: selectedTeam,
+        year: selectedYear,
+      })
+      await refetchExisting()
+      return res.data
+    } catch (error) {
+      console.error('Помилка створення запису:', error)
+      return null
+    }
   }
 
   const toggleMonth = async (emp, record, monthKey) => {
@@ -174,6 +190,7 @@ export default function Documents() {
 
     if (!currentRecord) {
       currentRecord = await ensureRecord(emp)
+      if (!currentRecord) return // Якщо не вдалося створити — виходимо
     }
 
     const newValue = !currentRecord[monthKey]
@@ -187,13 +204,16 @@ export default function Documents() {
   // History
   const histList = historyData?.results || historyData || []
   const filteredHist = search 
-    ? histList.filter(i => i.employee_name.toLowerCase().includes(search.toLowerCase())) 
+    ? histList.filter(i => i.employee_name?.toLowerCase().includes(search.toLowerCase())) 
     : histList
 
   const currentMonthKey = MONTHS[CURRENT_MONTH]?.key
   const currentMonthDone = rows.filter(({ record }) => record?.[currentMonthKey]).length
 
   const isLoading = selectedTeam && (activeLoading || onboardingLoading || existingLoading)
+
+  // Показуємо помилку якщо API cookies не існує
+  const showCookiesError = existingError || historyError || cookieTeamsError
 
   return (
     <div>
@@ -238,6 +258,22 @@ export default function Documents() {
           ))}
         </div>
       </div>
+
+      {/* Повідомлення про помилку API cookies */}
+      {showCookiesError && (
+        <div style={{ 
+          background: 'rgba(255,107,107,0.1)', 
+          border: '1px solid rgba(255,107,107,0.3)', 
+          borderRadius: 12, 
+          padding: 16, 
+          marginBottom: 20,
+          color: '#ff6b6b',
+          fontSize: 14
+        }}>
+          ⚠️ API endpoint <code>/cookies/</code> не знайдено (404). 
+          Перевірте, чи запущений бекенд та чи існує цей ендпоїнт.
+        </div>
+      )}
 
       {tab === 'checklist' && (
         <div>
@@ -346,12 +382,12 @@ export default function Documents() {
                             }}
                           >
                             <div
-                              onClick={() => toggleMonth(emp, record, m.key)}
+                              onClick={() => !showCookiesError && toggleMonth(emp, record, m.key)}
                               style={{
                                 width: 30, 
                                 height: 30, 
                                 borderRadius: 8, 
-                                cursor: 'pointer',
+                                cursor: showCookiesError ? 'not-allowed' : 'pointer',
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -361,8 +397,8 @@ export default function Documents() {
                                 border: checked ? '1px solid rgba(46,213,115,0.5)' : '1px solid rgba(255,255,255,0.1)',
                                 color: checked ? '#2ed573' : 'rgba(255,255,255,0.15)',
                                 fontSize: 16,
-                                pointerEvents: updateMutation.isPending ? 'none' : 'auto',
-                                opacity: updateMutation.isPending ? 0.6 : 1,
+                                pointerEvents: updateMutation.isPending || showCookiesError ? 'none' : 'auto',
+                                opacity: updateMutation.isPending || showCookiesError ? 0.6 : 1,
                               }}
                             >
                               {checked ? '✓' : ''}
@@ -413,6 +449,10 @@ export default function Documents() {
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'auto' }}>
             {histLoading ? (
               <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>Завантаження...</div>
+            ) : showCookiesError ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+                Немає доступу до історії — API не налаштовано
+              </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -494,7 +534,7 @@ export default function Documents() {
                       </td>
                     </tr>
                   ))}
-                  {filteredHist.length === 0 && (
+                  {filteredHist.length === 0 && !showCookiesError && (
                     <tr>
                       <td colSpan={15} style={{ padding: 50, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
                         Немає записів
