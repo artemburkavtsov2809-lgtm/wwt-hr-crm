@@ -1,3 +1,4 @@
+// pages/Performance.jsx
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../api/client'
@@ -18,6 +19,14 @@ const inputStyle = {
   background: 'rgba(255,255,255,0.08)',
   color: '#fff', fontSize: 13, outline: 'none',
   width: '100%', boxSizing: 'border-box',
+}
+
+// ✅ Хелпер для безпечного отримання масиву
+const getArray = (data) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (data.results && Array.isArray(data.results)) return data.results
+  return []
 }
 
 function ScoreDots({ value, max, onChange }) {
@@ -86,13 +95,13 @@ export default function Performance() {
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
 
-  const { data: employees, refetch: refetchEmployees } = useQuery({
+  const { data: employees } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  const { data: onboardingEmps, refetch: refetchOnboarding } = useQuery({
+  const { data: onboardingEmps } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
@@ -108,7 +117,7 @@ export default function Performance() {
     enabled: tab === 'history',
   })
 
-  const { data: perfTeams } = useQuery({
+  const { data: perfTeamsData } = useQuery({
     queryKey: ['perf-teams'],
     queryFn: () => api.get('/performance/teams/').then(r => r.data),
   })
@@ -119,7 +128,6 @@ export default function Performance() {
       refetchHistory()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-      // Очищаємо форми після збереження
       setScores({})
       setNotes({})
     },
@@ -130,9 +138,13 @@ export default function Performance() {
     onSuccess: () => refetchHistory(),
   })
 
+  // ✅ Використовуємо getArray для ВСІХ даних
+  const teams = getArray(teamsData)
+  const perfTeams = getArray(perfTeamsData)
+  const historyList = getArray(history)
   const allEmps = [
-    ...(employees?.results || employees || []),
-    ...(onboardingEmps?.results || onboardingEmps || []),
+    ...getArray(employees),
+    ...getArray(onboardingEmps),
   ]
 
   const setScore = (empId, skill, val) => {
@@ -155,9 +167,6 @@ export default function Performance() {
     saveMutation.mutate(reviews)
   }
 
-  const teams = teamsData || []
-
-  // Функція для оновлення даних при зміні вкладки
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (newTab === 'history') {
@@ -167,6 +176,7 @@ export default function Performance() {
 
   return (
     <div>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 32, fontWeight: 700, background: 'linear-gradient(90deg, #fff, #a8edea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
           Перформанс
@@ -187,6 +197,7 @@ export default function Performance() {
 
       {tab === 'review' && (
         <div>
+          {/* Filters */}
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 20, marginBottom: 24, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 6 }}>Команда</div>
@@ -302,7 +313,7 @@ export default function Performance() {
             <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)}
               style={{ ...inputStyle, maxWidth: 200 }}>
               <option value="">Всі команди</option>
-              {(perfTeams || []).map(t => <option key={t} value={t}>{t}</option>)}
+              {perfTeams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
@@ -319,7 +330,7 @@ export default function Performance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(history?.results || history || []).map(r => {
+                  {historyList.map(r => {
                     const avg = avgScore(r)
                     return (
                       <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
@@ -354,7 +365,7 @@ export default function Performance() {
                       </tr>
                     )
                   })}
-                  {(history?.results || history || []).length === 0 && (
+                  {historyList.length === 0 && (
                     <tr><td colSpan={13} style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Немає записів</td></tr>
                   )}
                 </tbody>
