@@ -42,7 +42,7 @@ export default function Documents() {
   const [search, setSearch] = useState('')
 
   // All teams from employees
-  const { data: teamsData, isError: teamsError } = useQuery({
+  const { data: teamsData, refetch: refetchTeams } = useQuery({
     queryKey: ['teams'],
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
@@ -50,8 +50,7 @@ export default function Documents() {
   // Active + onboarding employees
   const { 
     data: activeEmpsData, 
-    isLoading: activeLoading,
-    isError: activeError
+    isLoading: activeLoading 
   } = useQuery({
     queryKey: ['employees-active', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=active`).then(r => r.data),
@@ -60,53 +59,48 @@ export default function Documents() {
 
   const { 
     data: onboardingEmpsData, 
-    isLoading: onboardingLoading,
-    isError: onboardingError
+    isLoading: onboardingLoading 
   } = useQuery({
     queryKey: ['employees-onboarding', selectedTeam],
     queryFn: () => api.get(`/employees/?team=${selectedTeam}&status=onboarding`).then(r => r.data),
     enabled: !!selectedTeam,
   })
 
-  // Existing cookies records — З ВИКЛЮЧЕННЯМ якщо API не існує
+  // Existing cookies records — ПРАВИЛЬНИЙ ШЛЯХ /api/cookies/
   const { 
     data: existingData, 
     isLoading: existingLoading,
-    isError: existingError,
     refetch: refetchExisting 
   } = useQuery({
     queryKey: ['cookies', selectedTeam, selectedYear],
-    queryFn: () => api.get(`/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
+    queryFn: () => api.get(`/api/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
     enabled: !!selectedTeam,
-    retry: false, // Не повторювати при 404
   })
 
-  // History
+  // History — ПРАВИЛЬНИЙ ШЛЯХ /api/cookies/
   const { 
     data: historyData, 
-    isLoading: histLoading,
-    isError: historyError
+    isLoading: histLoading 
   } = useQuery({
     queryKey: ['cookies-history', filterTeam, filterYear],
     queryFn: () => {
       const params = new URLSearchParams()
       if (filterTeam) params.append('team', filterTeam)
       if (filterYear) params.append('year', filterYear)
-      return api.get(`/cookies/?${params}`).then(r => r.data)
+      return api.get(`/api/cookies/?${params}`).then(r => r.data)
     },
     enabled: tab === 'history',
-    retry: false,
   })
 
-  const { data: cookieTeams, isError: cookieTeamsError } = useQuery({
+  const { data: cookieTeams } = useQuery({
     queryKey: ['cookies-teams'],
-    queryFn: () => api.get('/cookies/teams/').then(r => r.data),
+    queryFn: () => api.get('/api/cookies/teams/').then(r => r.data),
     enabled: tab === 'history',
-    retry: false,
   })
 
+  // Mutations — ПРАВИЛЬНІ ШЛЯХИ /api/cookies/
   const createMutation = useMutation({
-    mutationFn: (data) => api.post('/cookies/', data),
+    mutationFn: (data) => api.post('/api/cookies/', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -114,7 +108,7 @@ export default function Documents() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.patch(`/cookies/${id}/`, data),
+    mutationFn: ({ id, data }) => api.patch(`/api/cookies/${id}/`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -122,7 +116,7 @@ export default function Documents() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/cookies/${id}/`),
+    mutationFn: (id) => api.delete(`/api/cookies/${id}/`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -136,19 +130,9 @@ export default function Documents() {
     }
   }, [selectedTeam, selectedYear, refetchExisting])
 
-  useEffect(() => {
-    if (tab === 'history') {
-      queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
-    }
-  }, [tab, filterTeam, filterYear, queryClient])
-
   const refreshAllData = () => {
-    queryClient.invalidateQueries({ queryKey: ['teams'] })
-    if (selectedTeam) {
-      queryClient.invalidateQueries({ queryKey: ['employees-active'] })
-      queryClient.invalidateQueries({ queryKey: ['employees-onboarding'] })
-      queryClient.invalidateQueries({ queryKey: ['cookies'] })
-    }
+    refetchTeams()
+    if (selectedTeam) refetchExisting()
     if (tab === 'history') {
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
     }
@@ -171,18 +155,13 @@ export default function Documents() {
     const existingRecord = existing.find(r => r.employee_name === emp.full_name)
     if (existingRecord) return existingRecord
 
-    try {
-      const res = await createMutation.mutateAsync({
-        employee_name: emp.full_name,
-        team: selectedTeam,
-        year: selectedYear,
-      })
-      await refetchExisting()
-      return res.data
-    } catch (error) {
-      console.error('Помилка створення запису:', error)
-      return null
-    }
+    const res = await createMutation.mutateAsync({
+      employee_name: emp.full_name,
+      team: selectedTeam,
+      year: selectedYear,
+    })
+    await refetchExisting()
+    return res.data
   }
 
   const toggleMonth = async (emp, record, monthKey) => {
@@ -190,7 +169,6 @@ export default function Documents() {
 
     if (!currentRecord) {
       currentRecord = await ensureRecord(emp)
-      if (!currentRecord) return // Якщо не вдалося створити — виходимо
     }
 
     const newValue = !currentRecord[monthKey]
@@ -211,9 +189,6 @@ export default function Documents() {
   const currentMonthDone = rows.filter(({ record }) => record?.[currentMonthKey]).length
 
   const isLoading = selectedTeam && (activeLoading || onboardingLoading || existingLoading)
-
-  // Показуємо помилку якщо API cookies не існує
-  const showCookiesError = existingError || historyError || cookieTeamsError
 
   return (
     <div>
@@ -258,22 +233,6 @@ export default function Documents() {
           ))}
         </div>
       </div>
-
-      {/* Повідомлення про помилку API cookies */}
-      {showCookiesError && (
-        <div style={{ 
-          background: 'rgba(255,107,107,0.1)', 
-          border: '1px solid rgba(255,107,107,0.3)', 
-          borderRadius: 12, 
-          padding: 16, 
-          marginBottom: 20,
-          color: '#ff6b6b',
-          fontSize: 14
-        }}>
-          ⚠️ API endpoint <code>/cookies/</code> не знайдено (404). 
-          Перевірте, чи запущений бекенд та чи існує цей ендпоїнт.
-        </div>
-      )}
 
       {tab === 'checklist' && (
         <div>
@@ -382,12 +341,12 @@ export default function Documents() {
                             }}
                           >
                             <div
-                              onClick={() => !showCookiesError && toggleMonth(emp, record, m.key)}
+                              onClick={() => toggleMonth(emp, record, m.key)}
                               style={{
                                 width: 30, 
                                 height: 30, 
                                 borderRadius: 8, 
-                                cursor: showCookiesError ? 'not-allowed' : 'pointer',
+                                cursor: 'pointer',
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -397,8 +356,8 @@ export default function Documents() {
                                 border: checked ? '1px solid rgba(46,213,115,0.5)' : '1px solid rgba(255,255,255,0.1)',
                                 color: checked ? '#2ed573' : 'rgba(255,255,255,0.15)',
                                 fontSize: 16,
-                                pointerEvents: updateMutation.isPending || showCookiesError ? 'none' : 'auto',
-                                opacity: updateMutation.isPending || showCookiesError ? 0.6 : 1,
+                                pointerEvents: updateMutation.isPending ? 'none' : 'auto',
+                                opacity: updateMutation.isPending ? 0.6 : 1,
                               }}
                             >
                               {checked ? '✓' : ''}
@@ -449,10 +408,6 @@ export default function Documents() {
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'auto' }}>
             {histLoading ? (
               <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>Завантаження...</div>
-            ) : showCookiesError ? (
-              <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
-                Немає доступу до історії — API не налаштовано
-              </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -534,7 +489,7 @@ export default function Documents() {
                       </td>
                     </tr>
                   ))}
-                  {filteredHist.length === 0 && !showCookiesError && (
+                  {filteredHist.length === 0 && (
                     <tr>
                       <td colSpan={15} style={{ padding: 50, textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
                         Немає записів
