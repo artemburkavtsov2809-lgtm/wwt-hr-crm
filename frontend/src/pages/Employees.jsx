@@ -58,7 +58,7 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-function EmployeeForm({ initial, teams, hrs, onSubmit, onClose, isLoading }) {
+function EmployeeForm({ initial, teams, users, onSubmit, onClose, isLoading }) {
   const [form, setForm] = useState(initial || {
     first_name: '', last_name: '', position: '',
     team: '', status: 'active', status_details: '', email: '',
@@ -94,13 +94,13 @@ function EmployeeForm({ initial, teams, hrs, onSubmit, onClose, isLoading }) {
           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 5 }}>Посада</div>
           <input style={inputStyle} value={form.position} onChange={e => set('position', e.target.value)} placeholder="FE Developer" />
         </div>
-      <div>
-        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 5 }}>Команда</div>
-        <select style={inputStyle} value={form.team} onChange={e => set('team', e.target.value)}>
-          <option value="">Оберіть команду</option>
-          {teams.map(t => <option key={t.id || t} value={t.name || t}>{t.name || t}</option>)}
-        </select>
-      </div>
+        <div>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 5 }}>Команда</div>
+          <select style={inputStyle} value={form.team} onChange={e => set('team', e.target.value)}>
+            <option value="">Оберіть команду</option>
+            {teams.map(t => <option key={t.id || t} value={t.name || t}>{t.name || t}</option>)}
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -119,12 +119,21 @@ function EmployeeForm({ initial, teams, hrs, onSubmit, onClose, isLoading }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 5 }}>HR відповідальний</div>
-          <input style={inputStyle} value={form.hr_responsible} onChange={e => set('hr_responsible', e.target.value)} placeholder="Марія" list="hrs-list" />
-          <datalist id="hrs-list">{hrs.map(h => <option key={h} value={h} />)}</datalist>
+          <select style={inputStyle} value={form.hr_responsible} onChange={e => set('hr_responsible', e.target.value)}>
+            <option value="">Оберіть HR</option>
+            {users.map(u => (
+              <option key={u.id} value={u.username}>{u.first_name} {u.last_name} ({u.username})</option>
+            ))}
+          </select>
         </div>
         <div>
           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 5 }}>Рекрутер</div>
-          <input style={inputStyle} value={form.recruiter} onChange={e => set('recruiter', e.target.value)} placeholder="Рекрутер" />
+          <select style={inputStyle} value={form.recruiter} onChange={e => set('recruiter', e.target.value)}>
+            <option value="">Оберіть рекрутера</option>
+            {users.map(u => (
+              <option key={u.id} value={u.username}>{u.first_name} {u.last_name} ({u.username})</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -201,8 +210,12 @@ export default function Employees() {
   const [editEmployee, setEditEmployee] = useState(null)
   const [showDismissed, setShowDismissed] = useState(false)
 
- const { data: teamsData } = useQuery({ queryKey: ['teams'], queryFn: () => api.get('/teams/').then(r => r.data) })
-  const { data: hrsData } = useQuery({ queryKey: ['hrs'], queryFn: () => api.get('/employees/hrs/').then(r => r.data) })
+  const { data: teamsData } = useQuery({ queryKey: ['teams'], queryFn: () => api.get('/teams/').then(r => r.data) })
+  
+  const { data: usersData } = useQuery({ 
+    queryKey: ['users'], 
+    queryFn: () => api.get('/auth/users/').then(r => r.data) 
+  })
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ['employees', search, filterTeam, filterStatus, filterHr, filterNda, filterRisk],
@@ -244,7 +257,7 @@ export default function Employees() {
   const allList = employees?.results || employees || []
   const list = showDismissed ? allList : allList.filter(e => e.status !== 'dismissed')
   const teams = teamsData?.results || teamsData || []
-  const hrs = hrsData || []
+  const users = usersData?.results || usersData || []
 
   const AVATAR_COLORS = [
     'linear-gradient(135deg, #667eea, #764ba2)',
@@ -286,7 +299,9 @@ export default function Employees() {
         </select>
         <select value={filterHr} onChange={e => setFilterHr(e.target.value)} style={filterSelectStyle}>
           <option value="">Всі HR</option>
-          {hrs.map(h => <option key={h} value={h}>{h}</option>)}
+          {users.map(u => (
+            <option key={u.id} value={u.username}>{u.first_name} {u.last_name}</option>
+          ))}
         </select>
         <select value={filterNda} onChange={e => setFilterNda(e.target.value)} style={filterSelectStyle}>
           <option value="">NDA (всі)</option>
@@ -386,7 +401,7 @@ export default function Employees() {
       {showModal && (
         <Modal title="Новий співробітник" onClose={() => setShowModal(false)}>
           <EmployeeForm
-            teams={teams} hrs={hrs}
+            teams={teams} users={users}
             onClose={() => setShowModal(false)}
             onSubmit={(data) => createMutation.mutate(data)}
             isLoading={createMutation.isPending}
@@ -396,7 +411,7 @@ export default function Employees() {
       {editEmployee && (
         <Modal title="Редагувати співробітника" onClose={() => setEditEmployee(null)}>
           <EmployeeForm
-            initial={editEmployee} teams={teams} hrs={hrs}
+            initial={editEmployee} teams={teams} users={users}
             onClose={() => setEditEmployee(null)}
             onSubmit={(data) => updateMutation.mutate({ id: editEmployee.id, data })}
             isLoading={updateMutation.isPending}

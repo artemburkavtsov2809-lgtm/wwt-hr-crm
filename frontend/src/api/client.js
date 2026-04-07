@@ -55,14 +55,16 @@ api.interceptors.response.use(
 
     console.log(`🔄 401 від ${originalRequest.url}, обробляємо...`)
 
-    // Якщо вже оновлюємо токен — ставимо в чергу
+    // Якщо вже оновлюємо токен — ставимо в чергу і чекаємо на новий токен
     if (isRefreshing) {
       console.log('⏳ Оновлення вже йде, чекаємо...')
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject })
       }).then(token => {
+        // Оновлюємо заголовок з новим токеном і ПОВТОРЮЄМО запит
+        console.log(`🔄 Повторюємо (з черги) ${originalRequest.url}...`)
         originalRequest.headers.Authorization = `Bearer ${token}`
-        return api(originalRequest)
+        return api(originalRequest) // <-- ВАЖЛИВО: повертаємо api(originalRequest)
       }).catch(err => {
         return Promise.reject(err)
       })
@@ -100,14 +102,12 @@ api.interceptors.response.use(
         console.log('✅ Токен оновлено:', res.data.access.substring(0, 50) + '...')
         localStorage.setItem('access_token', res.data.access)
         
-        // Оновлюємо заголовок для оригінального запиту
-        originalRequest.headers.Authorization = `Bearer ${res.data.access}`
-        
-        // Обробляємо чергу
+        // Обробляємо чергу з новим токеном
         processQueue(null, res.data.access)
         isRefreshing = false
         
-        // Повторюємо оригінальний запит
+        // Оновлюємо заголовок для оригінального запиту і повторюємо
+        originalRequest.headers.Authorization = `Bearer ${res.data.access}`
         console.log(`🔄 Повторюємо ${originalRequest.url}...`)
         return api(originalRequest)
       }
