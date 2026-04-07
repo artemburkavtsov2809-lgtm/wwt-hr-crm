@@ -47,34 +47,42 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
- getUserFromToken: () => {
-  const token = localStorage.getItem('access_token')
-  if (!token) {
-    console.log('getUserFromToken: немає токену')
-    return null
-  }
-  
-  try {
-    const payload = token.split('.')[1]
-    const decoded = JSON.parse(atob(payload))
-    console.log('Декодований payload:', decoded)
-    
-    // Якщо user_id = 1 або 2 - це суперюзер
-    const isSuperUser = decoded.user_id === 1 || decoded.user_id === 2
-    
-    return {
-      id: decoded.user_id || decoded.id,
-      username: decoded.username || 'admin',
-      email: decoded.email || 'admin@example.com',
-      is_superuser: isSuperUser,  // <-- ОСЬ ЦЕ ВАЖЛИВО
-      is_staff: isSuperUser,
-      first_name: decoded.first_name || 'Admin',
+  getUserFromToken: () => {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      console.log('getUserFromToken: немає токену')
+      return null
     }
-  } catch (error) {
-    console.error('Помилка декодування токену:', error)
-    return null
-  }
-},
+    
+    try {
+      const payload = token.split('.')[1]
+      const decoded = JSON.parse(atob(payload))
+      console.log('Декодований payload:', decoded)
+      
+      // Перевіряємо наявність полів у токені
+      const userId = decoded.user_id || decoded.id
+      const username = decoded.username
+      const email = decoded.email
+      const firstName = decoded.first_name
+      const isSuperUser = decoded.is_superuser || userId === 1 || userId === 2
+      
+      // Якщо якесь поле відсутнє, логуємо попередження
+      if (!username) console.warn('⚠️ username відсутній у токені')
+      if (!email) console.warn('⚠️ email відсутній у токені')
+      
+      return {
+        id: userId,
+        username: username,
+        email: email,
+        is_superuser: isSuperUser,
+        is_staff: decoded.is_staff || isSuperUser,
+        first_name: firstName,
+      }
+    } catch (error) {
+      console.error('Помилка декодування токену:', error)
+      return null
+    }
+  },
 
   fetchUser: async () => {
     const userFromToken = get().getUserFromToken()
@@ -96,12 +104,12 @@ const useAuthStore = create((set, get) => ({
       try {
         const res = await api.get(endpoint)
         if (res.data) {
-          console.log(`✅ Ендпоінт ${endpoint} працює:`, res.data)
+          console.log(`✅ Ендпоїнт ${endpoint} працює:`, res.data)
           set({ user: res.data })
           return res.data
         }
       } catch (e) {
-        console.log(`❌ Ендпоінт ${endpoint} не працює:`, e.response?.status)
+        console.log(`❌ Ендпоїнт ${endpoint} не працює:`, e.response?.status)
       }
     }
     
@@ -139,7 +147,11 @@ const useAuthStore = create((set, get) => ({
       }
       
       console.log('Токен валідний')
-      set({ isAuthenticated: true })
+      
+      // Оновлюємо user з токена при перевірці
+      const userData = get().getUserFromToken()
+      set({ isAuthenticated: true, user: userData })
+      
       return true
     } catch (error) {
       console.error('Помилка перевірки токену:', error)
