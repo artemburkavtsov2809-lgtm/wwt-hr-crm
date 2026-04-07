@@ -31,8 +31,8 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
-// Хелпер для безпечного отримання масиву з відповіді
-const getArrayFromResponse = (data) => {
+// Хелпер для безпечного отримання масиву
+const getArray = (data) => {
   if (!data) return []
   if (Array.isArray(data)) return data
   if (data.results && Array.isArray(data.results)) return data.results
@@ -50,7 +50,7 @@ export default function Documents() {
   const [search, setSearch] = useState('')
 
   // All teams from employees
-  const { data: teamsData, refetch: refetchTeams } = useQuery({
+  const { data: teamsData } = useQuery({
     queryKey: ['teams'],
     queryFn: () => api.get('/employees/teams/').then(r => r.data),
   })
@@ -74,18 +74,19 @@ export default function Documents() {
     enabled: !!selectedTeam,
   })
 
-  // Existing cookies records
+  // Cookies — БЕЗ /api/ префікса, бо він вже є в BASE_URL
   const { 
     data: existingData, 
     isLoading: existingLoading,
     refetch: refetchExisting 
   } = useQuery({
     queryKey: ['cookies', selectedTeam, selectedYear],
-    queryFn: () => api.get(`/api/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
+    queryFn: () => api.get(`/cookies/?team=${selectedTeam}&year=${selectedYear}`).then(r => r.data),
     enabled: !!selectedTeam,
+    retry: false, // Не повторювати при 404
   })
 
-  // History
+  // History — БЕЗ /api/ префікса
   const { 
     data: historyData, 
     isLoading: histLoading 
@@ -95,19 +96,21 @@ export default function Documents() {
       const params = new URLSearchParams()
       if (filterTeam) params.append('team', filterTeam)
       if (filterYear) params.append('year', filterYear)
-      return api.get(`/api/cookies/?${params}`).then(r => r.data)
+      return api.get(`/cookies/?${params}`).then(r => r.data)
     },
     enabled: tab === 'history',
+    retry: false,
   })
 
   const { data: cookieTeamsData } = useQuery({
     queryKey: ['cookies-teams'],
-    queryFn: () => api.get('/api/cookies/teams/').then(r => r.data),
+    queryFn: () => api.get('/cookies/teams/').then(r => r.data),
     enabled: tab === 'history',
+    retry: false,
   })
 
   const createMutation = useMutation({
-    mutationFn: (data) => api.post('/api/cookies/', data),
+    mutationFn: (data) => api.post('/cookies/', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -115,7 +118,7 @@ export default function Documents() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.patch(`/api/cookies/${id}/`, data),
+    mutationFn: ({ id, data }) => api.patch(`/cookies/${id}/`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -123,7 +126,7 @@ export default function Documents() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/api/cookies/${id}/`),
+    mutationFn: (id) => api.delete(`/cookies/${id}/`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cookies'] })
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
@@ -137,20 +140,20 @@ export default function Documents() {
   }, [selectedTeam, selectedYear, refetchExisting])
 
   const refreshAllData = () => {
-    refetchTeams()
+    queryClient.invalidateQueries({ queryKey: ['teams'] })
     if (selectedTeam) refetchExisting()
     if (tab === 'history') {
       queryClient.invalidateQueries({ queryKey: ['cookies-history'] })
     }
   }
 
-  // Використовуємо хелпер для всіх даних
-  const teams = getArrayFromResponse(teamsData)
-  const activeEmps = getArrayFromResponse(activeEmpsData)
-  const onboardingEmps = getArrayFromResponse(onboardingEmpsData)
+  // Використовуємо хелпер getArray для ВСІХ даних
+  const teams = getArray(teamsData)
+  const activeEmps = getArray(activeEmpsData)
+  const onboardingEmps = getArray(onboardingEmpsData)
   const allEmps = [...activeEmps, ...onboardingEmps]
-  const existing = getArrayFromResponse(existingData)
-  const cookieTeams = getArrayFromResponse(cookieTeamsData)
+  const existing = getArray(existingData)
+  const cookieTeams = getArray(cookieTeamsData)
 
   const rows = allEmps.map(emp => {
     const record = existing.find(r => r.employee_name === emp.full_name)
@@ -191,7 +194,7 @@ export default function Documents() {
     })
   }
 
-  const histList = getArrayFromResponse(historyData)
+  const histList = getArray(historyData)
   const filteredHist = search 
     ? histList.filter(i => i.employee_name?.toLowerCase().includes(search.toLowerCase())) 
     : histList
