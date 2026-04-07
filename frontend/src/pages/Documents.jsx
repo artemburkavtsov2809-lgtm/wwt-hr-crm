@@ -31,6 +31,14 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
+// Хелпер для безпечного отримання масиву з відповіді
+const getArrayFromResponse = (data) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (data.results && Array.isArray(data.results)) return data.results
+  return []
+}
+
 export default function Documents() {
   const queryClient = useQueryClient()
 
@@ -66,7 +74,7 @@ export default function Documents() {
     enabled: !!selectedTeam,
   })
 
-  // Existing cookies records — ПРАВИЛЬНИЙ ШЛЯХ /api/cookies/
+  // Existing cookies records
   const { 
     data: existingData, 
     isLoading: existingLoading,
@@ -77,7 +85,7 @@ export default function Documents() {
     enabled: !!selectedTeam,
   })
 
-  // History — ПРАВИЛЬНИЙ ШЛЯХ /api/cookies/
+  // History
   const { 
     data: historyData, 
     isLoading: histLoading 
@@ -92,13 +100,12 @@ export default function Documents() {
     enabled: tab === 'history',
   })
 
-  const { data: cookieTeams } = useQuery({
+  const { data: cookieTeamsData } = useQuery({
     queryKey: ['cookies-teams'],
     queryFn: () => api.get('/api/cookies/teams/').then(r => r.data),
     enabled: tab === 'history',
   })
 
-  // Mutations — ПРАВИЛЬНІ ШЛЯХИ /api/cookies/
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/api/cookies/', data),
     onSuccess: () => {
@@ -123,7 +130,6 @@ export default function Documents() {
     },
   })
 
-  // Автоматичне оновлення
   useEffect(() => {
     if (selectedTeam) {
       refetchExisting()
@@ -138,30 +144,35 @@ export default function Documents() {
     }
   }
 
-  const teams = teamsData || []
-  const activeEmps = activeEmpsData?.results || activeEmpsData || []
-  const onboardingEmps = onboardingEmpsData?.results || onboardingEmpsData || []
+  // Використовуємо хелпер для всіх даних
+  const teams = getArrayFromResponse(teamsData)
+  const activeEmps = getArrayFromResponse(activeEmpsData)
+  const onboardingEmps = getArrayFromResponse(onboardingEmpsData)
   const allEmps = [...activeEmps, ...onboardingEmps]
-  const existing = existingData?.results || existingData || []
+  const existing = getArrayFromResponse(existingData)
+  const cookieTeams = getArrayFromResponse(cookieTeamsData)
 
-  // Merge employees with existing records
   const rows = allEmps.map(emp => {
     const record = existing.find(r => r.employee_name === emp.full_name)
     return { emp, record }
   })
 
-  // Створюємо запис, якщо його немає
   const ensureRecord = async (emp) => {
     const existingRecord = existing.find(r => r.employee_name === emp.full_name)
     if (existingRecord) return existingRecord
 
-    const res = await createMutation.mutateAsync({
-      employee_name: emp.full_name,
-      team: selectedTeam,
-      year: selectedYear,
-    })
-    await refetchExisting()
-    return res.data
+    try {
+      const res = await createMutation.mutateAsync({
+        employee_name: emp.full_name,
+        team: selectedTeam,
+        year: selectedYear,
+      })
+      await refetchExisting()
+      return res.data
+    } catch (error) {
+      console.error('Помилка створення запису:', error)
+      return null
+    }
   }
 
   const toggleMonth = async (emp, record, monthKey) => {
@@ -169,6 +180,7 @@ export default function Documents() {
 
     if (!currentRecord) {
       currentRecord = await ensureRecord(emp)
+      if (!currentRecord) return
     }
 
     const newValue = !currentRecord[monthKey]
@@ -179,8 +191,7 @@ export default function Documents() {
     })
   }
 
-  // History
-  const histList = historyData?.results || historyData || []
+  const histList = getArrayFromResponse(historyData)
   const filteredHist = search 
     ? histList.filter(i => i.employee_name?.toLowerCase().includes(search.toLowerCase())) 
     : histList
@@ -398,7 +409,7 @@ export default function Documents() {
             />
             <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)} style={inputStyle}>
               <option value="">Всі команди</option>
-              {(cookieTeams || []).map(t => <option key={t} value={t}>{t}</option>)}
+              {cookieTeams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} style={inputStyle}>
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
