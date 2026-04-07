@@ -23,20 +23,26 @@ const useAuthStore = create((set, get) => ({
         throw new Error('Сервер не повернув access_token')
       }
       
+      // Зберігаємо токени І username
       localStorage.setItem('access_token', res.data.access)
       localStorage.setItem('refresh_token', res.data.refresh)
+      localStorage.setItem('username', username) // ← ЗБЕРІГАЄМО НІК!
       
-      console.log('3. Токени збережено')
+      console.log('3. Токени та username збережено')
       
-      // Завжди підтягуємо повні дані з API після логіну
-      console.log('4. Завантажуємо дані користувача з API...')
-      const userData = await get().fetchUser()
-      
-      if (!userData) {
-        throw new Error('Не вдалося отримати дані користувача з API')
+      // Отримуємо дані з токену + додаємо username
+      const tokenData = get().getUserFromToken()
+      const userData = {
+        ...tokenData,
+        username: username, // ← ВИКОРИСТОВУЄМО НІК З ЛОГІНУ
       }
       
-      console.log('5. Дані користувача отримано:', userData)
+      set({ 
+        isAuthenticated: true,
+        user: userData
+      })
+      
+      console.log('4. Користувач авторизований:', userData)
       
       return res.data
     } catch (error) {
@@ -47,6 +53,8 @@ const useAuthStore = create((set, get) => ({
 
   getUserFromToken: () => {
     const token = localStorage.getItem('access_token')
+    const savedUsername = localStorage.getItem('username') // ← БЕРЕМО З localStorage
+    
     if (!token) {
       console.log('getUserFromToken: немає токену')
       return null
@@ -60,11 +68,11 @@ const useAuthStore = create((set, get) => ({
       
       return {
         id: userId,
-        username: decoded.username || null, // null якщо немає
-        email: decoded.email || null,
+        username: savedUsername || decoded.username || `user_${userId}`,
+        email: decoded.email || '',
         is_superuser: decoded.is_superuser || userId === 1 || userId === 2,
         is_staff: decoded.is_staff || userId === 1 || userId === 2,
-        first_name: decoded.first_name || null,
+        first_name: decoded.first_name || '',
       }
     } catch (error) {
       console.error('Помилка декодування токену:', error)
@@ -72,62 +80,17 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  fetchUser: async () => {
-    // Перевіряємо всі можливі ендпоїнти
-    const possibleEndpoints = [
-      '/auth/users/me/',
-      '/users/me/',
-      '/me/',
-      '/user/',
-      '/users/current/',
-      '/api/auth/users/me/',
-      '/api/users/me/',
-    ]
-    
-    for (const endpoint of possibleEndpoints) {
-      try {
-        console.log(`Спроба ендпоїнта: ${endpoint}`)
-        const res = await api.get(endpoint)
-        
-        if (res.data) {
-          console.log(`✅ Успіх! ${endpoint}:`, res.data)
-          
-          // Нормалізуємо дані (різні API можуть повертати по-різному)
-          const userData = {
-            id: res.data.id || res.data.user_id || res.data.pk,
-            username: res.data.username || res.data.login || res.data.user_name,
-            email: res.data.email,
-            first_name: res.data.first_name || res.data.firstName,
-            last_name: res.data.last_name || res.data.lastName,
-            is_superuser: res.data.is_superuser || res.data.isSuperuser,
-            is_staff: res.data.is_staff || res.data.isStaff,
-          }
-          
-          set({ 
-            isAuthenticated: true,
-            user: userData 
-          })
-          
-          return userData
-        }
-      } catch (e) {
-        console.log(`❌ ${endpoint}:`, e.response?.status, e.response?.statusText)
-      }
-    }
-    
-    console.error('❌ Жоден ендпоїнт не працює!')
-    return null
-  },
-
   logout: () => {
     console.log('Вихід із системи')
-    localStorage.clear()
+    localStorage.clear() // ← Очищає ВСЕ включаючи username
     set({ isAuthenticated: false, user: null })
   },
   
-  checkAuth: async () => {
+  checkAuth: () => {
     const token = localStorage.getItem('access_token')
-    console.log('checkAuth: токен є?', !!token)
+    const savedUsername = localStorage.getItem('username')
+    
+    console.log('checkAuth: токен є?', !!token, 'username є?', !!savedUsername)
     
     if (!token) {
       set({ isAuthenticated: false, user: null })
@@ -146,11 +109,11 @@ const useAuthStore = create((set, get) => ({
         return false
       }
       
-      // Завжди підтягуємо свіжі дані з API
-      console.log('Токен валідний, оновлюємо дані з API...')
-      const userData = await get().fetchUser()
+      const userData = get().getUserFromToken()
+      set({ isAuthenticated: true, user: userData })
       
-      return !!userData
+      console.log('Токен валідний, користувач:', userData)
+      return true
     } catch (error) {
       console.error('Помилка перевірки токену:', error)
       get().logout()
